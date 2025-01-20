@@ -6,3 +6,10 @@
 ### 2025.1.16
 1.创建一个地形 有栏杆 有楼梯（up） 有楼梯（down）有台子 
 2.输入的观测要怎么处理一下？ 随机采样command 然后改command的概率 两层强化学习？ 
+### 2025.1.16
+1.如何创建有栏杆的台子 在terrain.cfg里多配置一个hurdle_id add_terrain_to_map得到这个id 然后在leggedrobot.py里set hurdle_actor  
+2.明天一天改完 要开工生成command的强化学习网络了。
+### 2025.1.20
+1.debug好几天栏杆也没出来 过年放假了 学不进  
+2.按照2.20来看 到九月入学 有六个月时间 必须保证投一篇阿 做两个工作ok吗
+ 

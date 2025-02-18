@@ -52,6 +52,10 @@ high-level 强化学习训练一个输出6d命令的策略
 #### 具体参数：
 low-level-teacher:6d命令 本体感知：身体速度、方位、关节位置误差和速度的历史记录（在每个控制环之间堆叠几帧）、动作历史记录以及每条腿的相位 外部感知：腿部的高度场采样 特权信息：接触状态，接触力，接触法线，摩擦系数，大腿和柄接触状态，外部力量和扭矩施加到身体上以及挥杆相持续时间 动作空间：周期运动发生器的相位差 与关节位置残差    
 high-level-teacher：本体感知：速度指令（3d速度命令）、身体速度、关节位置、关节速度、身体方向和之前的动作 外部感知同low-level 再加上一个球形感知 输出：3d速度的残差（跳过学习阶段）和滚动角 俯仰角 身体高度
+high-level-stuent: 文中说可以用相机 也可以用雷达 去恢复体素信息
+
+## Learning Multiple Gaits within Latent Space for Quadruped Robots
+reference: Learning Multiple Gaits within Latent Space for Quadruped Robots(没看出来publish在哪了)
 
 ## Dreamwaq
 看一下himloco改一下吧？
@@ -64,4 +68,4 @@ llm给出 每只脚什么时间与地面接触什么时间抬起
 llm加一些先验知识 给出目标电机位置
 
 ## AUTO_MOB
-![mob pipeline](./actuator_net.png)  
+![mob pipeline](./mob_v1.png)  

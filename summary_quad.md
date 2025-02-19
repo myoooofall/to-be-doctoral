@@ -73,7 +73,7 @@ critic:输入为 特权信息 st = [ot vt dt ht] dt为身体受到的力 ht为�
 reward沿用之前的 
 #### context-aided estimator
 ![CENets ](./CENets.png)   
-与之前直接估计机器人状态的estimator不同 他这个用ot历史同时估计机器人速度并推断环境信息
+与之前直接估计机器人状态的estimator不同 他这个用ot历史同时估计机器人速度并推断环境信息 VAE结构 但部署的时候只有第一个mlp 第二个decoder应该是为了提取隐性特征算loss？ 
 LCE(总损失) = Lest + LVAE,   
 Lest = MSE(˜vt, vt)  
 LVAE = M SE(˜ot+1, ot+1) + βDKL(q(zt|oH

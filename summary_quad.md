@@ -80,9 +80,9 @@ LVAE = M SE(˜ot+1, ot+1) + βDKL(q(zt|oH
 t ) ‖ p(zt)),
 
 总结：非对称的actor-critic critic网络里输入的是特权信息 那么预测的也是特权信息反馈的状态价值，actor则用非特权信息与上下文估计器训练，这样就可以让actor隐式的利用他没有输入 但是critic输入了的特权信息，来作出运动决策。
+
 ## AMP
-## Dreamwaq
-看一下himloco改一下吧？
+
 
 ## VBC(visual-whole-body-control)
 

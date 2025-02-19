@@ -56,7 +56,13 @@ high-level-stuent: 文中说可以用相机 也可以用雷达 去恢复体素�
 
 ## Learning Multiple Gaits within Latent Space for Quadruped Robots
 reference: Learning Multiple Gaits within Latent Space for Quadruped Robots(没看出来publish在哪了)
+![ pipeline](./multi_gait.png)  
+步态设计参考walk these ways 
+用到了类似AMP的模仿学习 看不懂 ...   
+不过他在复杂地形中训练了  所以性能强过仅在平坦地形下训练的walktheseways
+（不过还是个盲狗）
 
+## AMP
 ## Dreamwaq
 看一下himloco改一下吧？
 

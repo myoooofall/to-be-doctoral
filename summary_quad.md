@@ -62,7 +62,7 @@ reference: Learning Multiple Gaits within Latent Space for Quadruped Robots(没�
 不过他在复杂地形中训练了  所以性能强过仅在平坦地形下训练的walktheseways
 （不过还是个盲狗）
 
-# Dreamwaq
+# Dreamwaq 
 ![dream ](./dreamwaq.png) 
 reference:DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit
 Terrain Imagination via Deep Reinforcement Learning(ICRA 2023)  
@@ -80,6 +80,13 @@ LVAE = M SE(˜ot+1, ot+1) + βDKL(q(zt|oH
 t ) ‖ p(zt)),
 
 总结：非对称的actor-critic critic网络里输入的是特权信息 那么预测的也是特权信息反馈的状态价值，actor则用非特权信息与上下文估计器训练，这样就可以让actor隐式的利用他没有输入 但是critic输入了的特权信息，来作出运动决策。
+
+# Dreamwaq with depth images
+reference:PIE: Parkour with Implicit-Explicit Learning
+Framework for Legged Robots(RAL 2024)  
+![pie ](./pie.png) 
+和dreamwaq思路一模一样 加上了视觉信息做跑酷 视觉图片是一个2帧的buffer 为了和状态历史一起输入 使用了transformer捕捉特征 用GRU保存历史信息   
+#### 核心创新点就是这个estimator 和CENets 类似的VAE结构 loss也类似 mse加上kl散度 
 
 ## AMP
 

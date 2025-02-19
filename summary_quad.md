@@ -56,6 +56,11 @@ high-level-stuent: 文中说可以用相机 也可以用雷达 去恢复体素�
 
 # Learning Multiple Gaits within Latent Space for Quadruped Robots
 reference: Learning Multiple Gaits within Latent Space for Quadruped Robots(没看出来publish在哪了)
+![ pipeline](./multi_gait.png)  
+步态设计参考walk these ways 
+用到了类似AMP的模仿学习 看不懂 ...   
+不过他在复杂地形中训练了  所以性能强过仅在平坦地形下训练的walktheseways
+（不过还是个盲狗）
 
 # Dreamwaq
 ![dream ](./dreamwaq.png) 
@@ -75,6 +80,10 @@ LVAE = M SE(˜ot+1, ot+1) + βDKL(q(zt|oH
 t ) ‖ p(zt)),
 
 总结：非对称的actor-critic critic网络里输入的是特权信息 那么预测的也是特权信息反馈的状态价值，actor则用非特权信息与上下文估计器训练，这样就可以让actor隐式的利用他没有输入 但是critic输入了的特权信息，来作出运动决策。
+## AMP
+## Dreamwaq
+看一下himloco改一下吧？
+
 ## VBC(visual-whole-body-control)
 
 # LLM for quadruped 

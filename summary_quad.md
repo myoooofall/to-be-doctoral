@@ -27,7 +27,7 @@ actor-critic_RMA:在teacher中隔几次会更新一次  adapatation module 也�
 depth_encoder:backbone选择cnn，然后输出的特征向量与本体感觉再输入到GRU网络中 得到一个32+2的向量 32同scandots的输出 2为预测的heading_yaw  
 此时用teacher的policy来对比 此时的teacher用history_encoder scan_encoder 得到teacher_action
 student的观测略改 用预测的headingyaw 用depth_encoder的输出得到得到student_action 与teacher作loss 更新策略
-
+## 同期的robot parkour则使用分阶段的软硬约束来做 分开训了六种策略并蒸馏到了一块
 # Actuator net
 refrerence:Learning Agile and Dynamic Motor Skills for Legged Robots（ETH sci. robot 2019）  
 年代相对较早 locomotion的policy还比较简单  Actuator net的借鉴意义更大
@@ -88,6 +88,11 @@ Framework for Legged Robots(RAL 2024)
 和dreamwaq思路一模一样 加上了视觉信息做跑酷 视觉图片是一个2帧的buffer 为了和状态历史一起输入 使用了transformer捕捉特征 用GRU保存历史信息   
 #### 核心创新点就是这个estimator 和CENets 类似的VAE结构 loss也类似 mse加上kl散度 
 
+# MOVE
+reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View in 3D Environments(ICRA 2025)   
+感觉是PIE++ 训练有点复杂....
+![pie ](./mov.png) 
+![pie ](./mov_1.png) 
 ## AMP
 
 

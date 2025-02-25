@@ -29,5 +29,6 @@
 2.high level的输入改一改   
 
 ### 2025.2.25
-1.multi-critic的两篇论文看完   
-2.修改high level的训练框架
+1.multi-critic的两篇论文看完 （ok 根本没看）   
+2.修改high level的训练框架   
+3.现在的版本连领域随机化都不能加 后面不能freezing了肯定 明天解开freezing 然后学习一下里面的loss函数 尝试修改

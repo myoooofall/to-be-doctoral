@@ -32,7 +32,7 @@ student的观测略改 用预测的headingyaw 用depth_encoder的输出得到得
 refrerence:Learning Agile and Dynamic Motor Skills for Legged Robots（ETH sci. robot 2019）  
 年代相对较早 locomotion的policy还比较简单  Actuator net的借鉴意义更大
 ![Actuator net](./actuator_net.png)  
-通过电机状态历史来估计状态  
+##### 通过电机状态历史来估计状态  
 收集一个数据集 包含位置误差 关节速度和力矩 通过生成足部轨迹 并用逆运动学求解，加入扰动，收集一个dataset监督学习
 设计actuator net （MLP）在这个数据集上训练 最终预测扭矩
 
@@ -63,7 +63,7 @@ reference: Learning Multiple Gaits within Latent Space for Quadruped Robots(没�
 （不过还是个盲狗）
 
 # Dreamwaq 
-![dream ](./dreamwaq.png) 
+![dream ](./dreamwaq.png)   
 reference:DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit
 Terrain Imagination via Deep Reinforcement Learning(ICRA 2023)  
 #### 采用非对称的actor-critic网络 
@@ -83,8 +83,8 @@ t ) ‖ p(zt)),
 
 # Dreamwaq with depth images
 reference:PIE: Parkour with Implicit-Explicit Learning
-Framework for Legged Robots(RAL 2024)  
-![pie ](./pie.png) 
+Framework for Legged Robots(RAL 2024)    
+![pie ](./pie.png)   
 和dreamwaq思路一模一样 加上了视觉信息做跑酷 视觉图片是一个2帧的buffer 为了和状态历史一起输入 使用了transformer捕捉特征 用GRU保存历史信息   
 #### 核心创新点就是这个estimator 和CENets 类似的VAE结构 loss也类似 mse加上kl散度 
 
@@ -93,8 +93,43 @@ reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View 
 感觉是PIE++ 训练有点复杂....
 ![pie ](./mov.png) 
 ![pie ](./mov_1.png) 
-## AMP
 
+# DeepMimic
+reference:DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills(2018年的文章 对后续的AWP等模仿学习都有参考意义)  
+overview:使用基于ppo的强化学习策略，control policy π (at|st,gt) , gt为任务目标，at为目标位置，通过PD控制，奖励函数定义为模仿奖励和任务奖励。  
+control policy π 为两层全连接 1024*512 使用relu激活 价值网络隐藏层数相同  
+（对于带视觉的网络 则在全连接前加入卷积网路）
+#### 奖励设计
+![deepmimic_reward1 ](./deepmimic_reward1.png)   
+r<sup>I</sup><sub>t</sub>为模仿策略 r<sup>G</sup><sub>t</sub>为任务策略 
+![deepmimic_reward2 ](./deepmimic_reward2.png)   
+模仿策略可以被分为与参考轨迹的位置差 速度差 末端执行器位置差和质心差
+#### RSI(初始状态分布采样自参考轨迹而非固定) 
+能够帮助策略了解什么状态下的回报比较高 进而指导策略更新 （传统RL因为没有参考轨迹 所以初始状态是固定的 以后空翻为例 策略很难知道翻起来的回报高 但RSI直接将状态初始化为空中 策略就可以收到高回报进而梯度更新）
+#### Early Termination
+将无限长度的MDP过程通过设置终止条件提前终止（目前已经很普遍了 这个方式）  
+#### 在这篇文章中 为了模仿特定的clip 策略中包括一项相位信息 来表示时间的相对关系
+#### Multi 前面介绍的都是从单个参考轨迹中学习 现在介绍多个参考轨迹学习
+Multi-Clip Reward：为策略提供多个参考轨迹剪辑，实验验证虽然这个公式简单，但是是有效的，但是仅对比较相似的参考轨迹剪辑有效，如向前走 向右转。
+![Multi-Clip Reward ](./multi-clip.png)   
+Skill Selector:训练一个策略同时模仿一组不同的技能，在不同时间使用不同剪辑。放弃人物目标奖励，只训练模仿目标奖励，训练的时候对不同的模仿目标随机采样。然后play的时候由用户手动指定。让用户指定的方法就是将动作编成一个one-hot码，和前文中的goal一起输入网络（对同一类运动的具体效果进行选择，比如对于翻转，可以选择：向前翻转、向后翻转、左侧翻转、右侧翻转等）  
+Composite Policy:训练不同的策略执行不同技能 然后集成到一个复合策略中 通过价值函数确定给定状态下最合适的技能 使用波尔兹曼分布构造复合策略  在每个周期开始时，从复合策略中采样新技能，并在选择新技能之前执行所选技能一个完整的周期。为了防止角色重复执行相同的技能，该策略被限制为从不连续对相同的技能进行采样.  
+在训练时每种动作分别训练，训练结束执行时则根据每种动作所对应的输出的value network返回值确定当前state下哪一种动作被使用。（可以从不同类别运动的动作中进行选择 ，做出最符合 t tt时刻状态的动作 a t a_tat，以便更好地适应新的环境和任务。）
+
+# AMP
+区别于deepmimic的模仿 AMP学习的是风格 判别器不考虑动作 仅考虑状态的转移来判断是否基于参考轨迹 GAIL+PPO
+#### 奖励设计
+r (st , at , st+1, g) = w<sup>G</sup> r<sup>G</sup>  (st , at , st , g) +  w<sup>S</sup> r<sup>S</sup> (st , st+1) 即目标奖励和风格奖励  
+训练判别器 采用最小二乘GAN  又考虑到GAN本身训练的不稳定性 加入梯度惩罚项 判别器D的更新方式为  
+![ ](./AMP1.png) 
+并将RL奖励设计为r (st , st+1) = max 0, 1 − 0.25(D (st , st+1) − 1)<sup>2</sup> . （Equation 7）
+#### 训练细节
+actor network 1024*512全连接层 输出的动作的高斯分布方差是手动指定的 value network与判别器也为类似架构
+#### 伪代码
+![ ](./AMP2.png) 
+#### SUMMARY
+AMP其实主要也只是针对单个参考轨迹进行学习，如果学习的轨迹较多，可能只能学到一部分。  
+由于没有相位变量的存在，AMP学习出来的策略并不严格跟随参考轨迹，但学习出来的性能仍然很好，而且也让AMP能够更好的处理复杂任务。（后面ETH出了一篇基于AMP的文章 Multi-AMP 就是让一个策略先后学习多个参考轨迹了 通过对参考轨迹采样的方式来选择 ）
 
 ## VBC(visual-whole-body-control)
 

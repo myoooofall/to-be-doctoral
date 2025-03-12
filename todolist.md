@@ -32,3 +32,18 @@
 1.multi-critic的两篇论文看完 （ok 根本没看）   
 2.修改high level的训练框架   
 3.现在的版本连领域随机化都不能加 后面不能freezing了肯定 明天解开freezing 然后学习一下里面的loss函数 尝试修改
+
+### 2025.2.26
+1.先不freezing了 把奖励问题找到 actions为什么有bug ppo再看看把
+
+
+### 2025.3,5 
+roll角度有大问题 但是play没问题 继续找bug? 
+1.论文to read   
+FLD 傅里叶相关   
+amp 模仿学习相关（还有代码）
+multi critic 相关  怎么着加起来也有个五六篇啊
+
+### 2025.3.11
+1.把框架改成dreamwaq pie的框架 （main task）
+2.加点terrain level 验证

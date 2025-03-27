@@ -47,3 +47,16 @@ multi critic 相关  怎么着加起来也有个五六篇啊
 ### 2025.3.11
 1.把框架改成dreamwaq pie的框架 （main task）
 2.加点terrain level 验证
+
+### 2025.3.13
+1.terrain搞定了 pie框架学习并使用起来？ 1day的工作量吧？
+2.但是把policy解封会比较麻烦 multi-critic怎么说
+
+
+### 2025.3.25
+1.阔别已久了属于是 人形的几篇模仿学习工作要看
+2.extreme parkour 重新训练
+3.周三到周四 然后周五开始训练 还是在补充基础啊我曹 
+人形 h20 这些文章也要看 
+
+

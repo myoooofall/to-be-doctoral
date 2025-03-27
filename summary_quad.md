@@ -93,7 +93,12 @@ reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View 
 感觉是PIE++ 训练有点复杂....
 ![pie ](./mov.png) 
 ![pie ](./mov_1.png) 
-
+# Himloco
+reference:HYBRID INTERNAL MODEL: LEARNING AGILE LEGGED LOCOMOTION WITH SIMULATED ROBOT RESPONSE(ICLR), 2024
+![HIMLOCO ](./HIMLOCO.png)  
+感觉IMC是一个幌子 主要还是用了对比学习来取代历史状态预测的环境信息与ground truth的mse  
+对比学习用的是swav 因为MOVE也用到了对比学习 可以大概总结一下
+![对比学习 ](./contra.png) 
 # DeepMimic
 reference:DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills(2018年的文章 对后续的AWP等模仿学习都有参考意义)  
 overview:使用基于ppo的强化学习策略，control policy π (at|st,gt) , gt为任务目标，at为目标位置，通过PD控制，奖励函数定义为模仿奖励和任务奖励。  
@@ -133,6 +138,14 @@ AMP其实主要也只是针对单个参考轨迹进行学习，如果学习的�
 
 ## VBC(visual-whole-body-control)
 
+## Quarduped VLA
+reference:QUAR-VLA: Vision-Language-Action Model for Quadruped Robots(ICCV 2023 )
+自己构建了数据集，涉及了很多任务（多任务 真机数据 模拟数据 很多篇幅在讲这些）  
+VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一个预先训练的视觉语言模型 将里面的 输出的也不是电机指令 是11维度的命令 再喂给端到端的强化学习控制器 这里用了mob的
+![alt text](image.png)
+主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
+类比nlp 生成字是一个字典 找最大概率字的过程 电机的连续值会导致无穷大的字典 所以把电机值分为256个离散的桶 来计算每个桶的概率 用交叉熵作loss 当然 最后传给电机的时候还要作逆离散化
+ 
 # LLM for quadruped 
 llm修改奖励函数  
 llm给出 每只脚什么时间与地面接触什么时间抬起  
@@ -140,3 +153,8 @@ llm加一些先验知识 给出目标电机位置
 
 ## AUTO_MOB
 ![mob pipeline](./mob_v1.png)  
+
+
+## Tricks in reinforce learining
+### Improving Generalization in Visual Reinforcement Learning via Conflict-aware Gradient Agreement Augmentation
+为了减轻在不同数据上训练的梯度冲突 提出了一种对梯度作优化的方式 一种数学优化方法

@@ -31,7 +31,9 @@ student的观测略改 用预测的headingyaw 用depth_encoder的输出得到得
 ### 同期的robot parkour则使用分阶段的软硬约束来做 分开训了六种策略并蒸馏到了一块
 # Actuator net
 refrerence:Learning Agile and Dynamic Motor Skills for Legged Robots（ETH sci. robot 2019）  
-年代相对较早 locomotion的policy还比较简单  Actuator net的借鉴意义更大
+
+年代相对较早 locomotion的policy还比较简单  Actuator net的借鉴意义更大  
+
 ![Actuator net](./actuator_net.png)  
 ##### 通过电机状态历史来估计状态  
 收集一个数据集 包含位置误差 关节速度和力矩 通过生成足部轨迹 并用逆运动学求解，加入扰动，收集一个dataset监督学习
@@ -96,9 +98,11 @@ Framework for Legged Robots(RAL 2024)
 #### 核心创新点就是这个estimator 和CENets 类似的VAE结构 loss也类似 mse加上kl散度 
 
 # MOVE
-reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View in 3D Environments(ICRA 2025)   
-感觉是PIE++ 训练有点复杂....
-![pie ](./mov.png) 
+reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View in 3D Environments(ICRA 2025)     
+感觉是PIE++ 训练有点复杂....  
+
+![pie ](./mov.png)  
+
 ![pie ](./mov_1.png)
 
 # Himloco
@@ -155,7 +159,7 @@ AMP其实主要也只是针对单个参考轨迹进行学习，如果学习的�
 reference:QUAR-VLA: Vision-Language-Action Model for Quadruped Robots(ICCV 2023 )
 自己构建了数据集，涉及了很多任务(基础感知 goto somewhere 的导航 如卸载背上东西的规划 避障 但没有涉及复杂地形)（多任务 真机数据 模拟数据 很多篇幅在讲这些）  
 VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一个预先训练的视觉语言模型 将里面的 输出的也不是电机指令 是11维度的命令 再喂给端到端的强化学习控制器 这里用了mob的
-![alt text](image.png)
+![alt text](image.png)  
 主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
 类比nlp 生成字是一个字典 找最大概率字的过程 电机的连续值会导致无穷大的字典 所以把电机值分为256个离散的桶 来计算每个桶的概率 用交叉熵作loss 当然 最后传给电机的时候还要作逆离散化
  

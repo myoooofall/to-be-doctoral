@@ -105,9 +105,9 @@ overview:使用基于ppo的强化学习策略，control policy π (at|st,gt) , g
 control policy π 为两层全连接 1024*512 使用relu激活 价值网络隐藏层数相同  
 （对于带视觉的网络 则在全连接前加入卷积网路）
 #### 奖励设计
-![deepmimic_reward1 ](./deepmimic_reward1.png)   
-r<sup>I</sup><sub>t</sub>为模仿策略 r<sup>G</sup><sub>t</sub>为任务策略 
-![deepmimic_reward2 ](./deepmimic_reward2.png)   
+![deepmimic_reward1 ](./deepmimic_reward1.png)     
+r<sup>I</sup><sub>t</sub>为模仿策略 r<sup>G</sup><sub>t</sub>为任务策略   
+![deepmimic_reward2 ](./deepmimic_reward2.png)     
 模仿策略可以被分为与参考轨迹的位置差 速度差 末端执行器位置差和质心差
 #### RSI(初始状态分布采样自参考轨迹而非固定) 
 能够帮助策略了解什么状态下的回报比较高 进而指导策略更新 （传统RL因为没有参考轨迹 所以初始状态是固定的 以后空翻为例 策略很难知道翻起来的回报高 但RSI直接将状态初始化为空中 策略就可以收到高回报进而梯度更新）
@@ -140,7 +140,7 @@ AMP其实主要也只是针对单个参考轨迹进行学习，如果学习的�
 
 ## Quarduped VLA
 reference:QUAR-VLA: Vision-Language-Action Model for Quadruped Robots(ICCV 2023 )
-自己构建了数据集，涉及了很多任务（多任务 真机数据 模拟数据 很多篇幅在讲这些）  
+自己构建了数据集，涉及了很多任务(基础感知 goto somewhere 的导航 如卸载背上东西的规划 避障 但没有涉及复杂地形)（多任务 真机数据 模拟数据 很多篇幅在讲这些）  
 VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一个预先训练的视觉语言模型 将里面的 输出的也不是电机指令 是11维度的命令 再喂给端到端的强化学习控制器 这里用了mob的
 ![alt text](image.png)
 主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
@@ -150,7 +150,7 @@ VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一
 llm修改奖励函数  
 llm给出 每只脚什么时间与地面接触什么时间抬起  
 llm加一些先验知识 给出目标电机位置
-
+nvidia-smi
 ## AUTO_MOB
 ![mob pipeline](./mob_v1.png)  
 

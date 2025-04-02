@@ -15,6 +15,23 @@ reference:Learning Quadrupedal Locomotion over Challenging Terrain(ETH 2020 Scie
 #### student policy在学生阶段是会更新的 teacher policy的输出起到监督作用 TCN Encoder也会随着更新
 ![teacher-student-loss](./teacher-student-loss.png)
 
+# ANYmal Parkour: Learning Agile Navigation for  Quadrupedal Robots 
+ETH science robotics
+## 简介
+三个模块 感知模块 运动模块 导航模块   
+运动模块训练五个策略 导航模块利用感知模块的向量选择要用的技能  
+2m/s 在每个时间步能选择技能
+
+导航模块了解每种技能的能力和局限性 来调整轨迹？  
+相当于建立一个概率函数 选择高概率的路径  
+## perception module
+用了深度摄像头和雷达获取点云信息 重建地形 附录里有一些点云的具体描述
+六个realsense深度摄像头 和一个雷达 融合点  
+具体的重建上离的近的地方高分辨率 远的地方低分辨率
+## locomotion module
+每个策略是单独训练的 用的是基于位置的命令
+## navigation module
+也是用强化学习训练的 最后得到一个每个动作的概率分布 最终部署的时候是选择最高概率
 
 # Extreme parkour(CMU)
 reference:Extreme Parkour with Legged Robots  
@@ -162,7 +179,42 @@ VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一
 ![alt text](image.png)  
 主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
 类比nlp 生成字是一个字典 找最大概率字的过程 电机的连续值会导致无穷大的字典 所以把电机值分为256个离散的桶 来计算每个桶的概率 用交叉熵作loss 当然 最后传给电机的时候还要作逆离散化
- 
+ # WBC for Wheels 
+ ### Arm-Constrained Curriculum Learning for Loco-Manipulation of the  Wheel-Legged Robot （IROS2024 Oral）
+ 提出了一种专门为轮腿机器人运动设计的手臂约束课程强化学习框架 同时操控手臂和轮子
+ ## 方法
+ ### CMDP(约束马尔可夫决策过程)
+ ![公式1](math1.png)  
+ $J_{ij}$是机械臂约束  $d_{k}$是阈值  
+ 具体约束设计：  
+ 手臂关节扭矩约束     
+ ![公式1](fig2.png)  
+ 位置约束（末端执行器不能离base太远 空间有限）  
+ ![公式1](fig3.png)   
+ 碰撞约束 （计算每个连杆受到的力）  
+ ![公式1](fig2.png)
+ ### P3O(PPO-惩罚)
+ ### Reward-Aware Curriculum Learning 
+ 在训练中，没有采用常规的课程学习方式，在agent的初始化上改进，刚开始初始化接近目标姿势，慢慢扩大范围。  随着奖励越来越大，目标位置设置的范围也扩大。  
+ 优点：1.奖励稀疏函数  
+ 2.防止局部最优。手臂的工作空间大但奖励少，因此，手臂往往采取保守动作来避免影响到腿部的稳定，可以理解为在抗拒运动。通过这种方式刚开始就能获得较高奖励，减少对运动的抗拒。
+ ## 结构 分段框架
+ ![结构图1](fig1.png)
+ 上层：通过模仿学习与行为克隆训练一个目标网络 输出control command 包含底盘的线速度和角速度 以及arm的位姿  
+ 下层：AC_PPO 具体来说，将上层网络的输入与机器人的本体感觉作为输入 比传统PPO多了一个constraint critic  
+ ### 实验
+ 硬件采用AIRBOT-两条腿的轮腿机器人 腿部各3电机 手臂六自由度+一个夹具
+ ### 训练
+ Observation Space：State $S_{t}$ ={$S_{t}^{base},S_{t}^{arm}$,$S_{t}^{cmd}$} ∈ $R^{46}$  
+ $S_{t}^{base}$ ={h, v, w, R, $q_{leg}$, $\dot q_{leg}$, $\dot q_{wheel}$} ∈ $R^{20}$  
+ $S_{t}^{arm}$ ={$q_{arm}$, $\dot q_{arm}$, $p_{ee}$, $R_{ee}$} ∈ $R^{18}$  
+ $S_{t}^{cmd}$ ={$v_{x}^{cmd}$ , $w_{z}^{cmd}$ , $p_{ee}^{cmd}$ , $R_{ee}^{cmd}$} ∈ $R^{16}$  
+ ![结构图1](fig5.png)  
+ Action Space: Action A={$A_{leg}$, $A_{arm}$} ∈ $R^{12}$ 各位6个维度   
+ benchmark:1.和不带Reward-Aware Curriculum Learning的比较  
+ 2.和不带constraint critic的比较
+ ### tips
+ 1。代码只开源了下层 不知道上层模仿学习得到的轨迹好不好（文章中也没怎么提到）
 # VBC(visual-whole-body-control)
 
 # LLM for quadruped 

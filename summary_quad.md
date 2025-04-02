@@ -15,6 +15,7 @@ reference:Learning Quadrupedal Locomotion over Challenging Terrain(ETH 2020 Scie
 #### student policy在学生阶段是会更新的 teacher policy的输出起到监督作用 TCN Encoder也会随着更新
 ![teacher-student-loss](./teacher-student-loss.png)
 
+
 # Extreme parkour(CMU)
 reference:Extreme Parkour with Legged Robots  
 ![Extreme Parkour](./extreme_parkour.png)
@@ -27,7 +28,7 @@ actor-critic_RMA:在teacher中隔几次会更新一次  adapatation module 也�
 depth_encoder:backbone选择cnn，然后输出的特征向量与本体感觉再输入到GRU网络中 得到一个32+2的向量 32同scandots的输出 2为预测的heading_yaw  
 此时用teacher的policy来对比 此时的teacher用history_encoder scan_encoder 得到teacher_action
 student的观测略改 用预测的headingyaw 用depth_encoder的输出得到得到student_action 与teacher作loss 更新策略
-## 同期的robot parkour则使用分阶段的软硬约束来做 分开训了六种策略并蒸馏到了一块
+### 同期的robot parkour则使用分阶段的软硬约束来做 分开训了六种策略并蒸馏到了一块
 # Actuator net
 refrerence:Learning Agile and Dynamic Motor Skills for Legged Robots（ETH sci. robot 2019）  
 年代相对较早 locomotion的policy还比较简单  Actuator net的借鉴意义更大
@@ -93,12 +94,7 @@ reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View 
 感觉是PIE++ 训练有点复杂....
 ![pie ](./mov.png) 
 ![pie ](./mov_1.png) 
-# Himloco
-reference:HYBRID INTERNAL MODEL: LEARNING AGILE LEGGED LOCOMOTION WITH SIMULATED ROBOT RESPONSE(ICLR), 2024
-![HIMLOCO ](./HIMLOCO.png)  
-感觉IMC是一个幌子 主要还是用了对比学习来取代历史状态预测的环境信息与ground truth的mse  
-对比学习用的是swav 因为MOVE也用到了对比学习 可以大概总结一下
-![对比学习 ](./contra.png) 
+
 # DeepMimic
 reference:DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills(2018年的文章 对后续的AWP等模仿学习都有参考意义)  
 overview:使用基于ppo的强化学习策略，control policy π (at|st,gt) , gt为任务目标，at为目标位置，通过PD控制，奖励函数定义为模仿奖励和任务奖励。  
@@ -146,12 +142,14 @@ VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一
 主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
 类比nlp 生成字是一个字典 找最大概率字的过程 电机的连续值会导致无穷大的字典 所以把电机值分为256个离散的桶 来计算每个桶的概率 用交叉熵作loss 当然 最后传给电机的时候还要作逆离散化
  
+# VBC(visual-whole-body-control)
+
 # LLM for quadruped 
 llm修改奖励函数  
 llm给出 每只脚什么时间与地面接触什么时间抬起  
 llm加一些先验知识 给出目标电机位置
 nvidia-smi
-## AUTO_MOB
+# AUTO_MOB
 ![mob pipeline](./mob_v1.png)  
 
 

@@ -58,9 +58,15 @@ high-level-stuent: 文中说可以用相机 也可以用雷达 去恢复体素�
 # Learning Multiple Gaits within Latent Space for Quadruped Robots
 reference: Learning Multiple Gaits within Latent Space for Quadruped Robots(没看出来publish在哪了)
 ![ pipeline](./multi_gait.png)  
-步态设计参考walk these ways 
-用到了类似AMP的模仿学习 看不懂 ...   
+步态设计参考walk these ways    
 不过他在复杂地形中训练了  所以性能强过仅在平坦地形下训练的walktheseways
+
+### 核心组件 Gait Encoder 和Gait Generator 两者同时训练
+#### Gait Encoder：把步态信息，身体高度，频率等八个参数作为信息 交给Gait Encoder编码成隐变量 归一化后变成一个特征空间 这个特征空间会作为下层强化学习的部分输入
+####  Gait Generator：输入为自身状态和命令，输出被强制和Gait Encoder对齐 也就是说 Gait Generator的生成和Gait Encoder是在同一个空间下的 可以理解为让Generator学习去生成和固定步态一样的 
+在具体训练时 分为两个组   
+Gait Encoder 输入为固定步态参数 在平地训练 且在训练时添加AMP的先验奖励与步态的强制奖励 AMP的dataset为不同的固定步态参数的组合 
+Gait Generator 输入仅为本体状态和速度 在复杂地形上训练 没有AMP和步态强制奖励 也就是说 他鼓励Generator去探索适合的步态隐藏变量 由于限制在统一特征空间下 又能自己探索 实现去学习生成和固定步态类似的特征  （就像是在参考Gait Encoder并在他的基础上自行探索的感觉 很好的思路 而且能防止学崩溃）
 （不过还是个盲狗）
 
 # Dreamwaq 
@@ -93,7 +99,18 @@ Framework for Legged Robots(RAL 2024)
 reference:MOVE: Multi-skill Omnidirectional Legged Locomotion with Limited View in 3D Environments(ICRA 2025)   
 感觉是PIE++ 训练有点复杂....
 ![pie ](./mov.png) 
-![pie ](./mov_1.png) 
+![pie ](./mov_1.png)
+
+# Himloco
+reference:HYBRID INTERNAL MODEL: LEARNING AGILE LEGGED LOCOMOTION WITH SIMULATED ROBOT RESPONSE(ICLR), 2024
+![HIMLOCO ](./HIMLOCO.png)  
+感觉IMC是一个幌子 主要还是用了对比学习来取代历史状态预测的环境信息与ground truth的mse  
+对比学习用的是swav 因为MOVE也用到了对比学习 可以大概总结一下
+![对比学习 ](./contra.png) 
+
+# PIM
+在人形上 加了lidar（用了FAST-LIO来恢复地面高度场）来做percepetion 没有用深度图 主要的思想是采样高度图 并用dreamwaq思路 在perception 预测module中 添加了采样点信息
+![PIM ](./PIM.png) 
 
 # DeepMimic
 reference:DeepMimic: Example-Guided Deep Reinforcement Learning of Physics-Based Character Skills(2018年的文章 对后续的AWP等模仿学习都有参考意义)  

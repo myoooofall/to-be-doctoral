@@ -15,8 +15,8 @@ reference:Learning Quadrupedal Locomotion over Challenging Terrain(ETH 2020 Scie
 #### student policy在学生阶段是会更新的 teacher policy的输出起到监督作用 TCN Encoder也会随着更新
 ![teacher-student-loss](./teacher-student-loss.png)
 
-# ANYmal Parkour: Learning Agile Navigation for  Quadrupedal Robots 
-ETH science robotics
+# ANYmal Parkour
+reference:ANYmal Parkour: Learning Agile Navigation for Quadrupedal Robots (ETH 2023 Science robotics)
 ## 简介
 三个模块 感知模块 运动模块 导航模块   
 运动模块训练五个策略 导航模块利用感知模块的向量选择要用的技能  
@@ -180,7 +180,7 @@ VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一
 主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
 类比nlp 生成字是一个字典 找最大概率字的过程 电机的连续值会导致无穷大的字典 所以把电机值分为256个离散的桶 来计算每个桶的概率 用交叉熵作loss 当然 最后传给电机的时候还要作逆离散化
  # WBC for Wheels 
- ### Arm-Constrained Curriculum Learning for Loco-Manipulation of the  Wheel-Legged Robot （IROS2024 Oral）
+ reference: Arm-Constrained Curriculum Learning for Loco-Manipulation of the  Wheel-Legged Robot （IROS2024 Oral）
  提出了一种专门为轮腿机器人运动设计的手臂约束课程强化学习框架 同时操控手臂和轮子
  ## 方法
  ### CMDP(约束马尔可夫决策过程)

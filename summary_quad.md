@@ -170,16 +170,31 @@ actor network 1024*512全连接层 输出的动作的高斯分布方差是手动
 AMP其实主要也只是针对单个参考轨迹进行学习，如果学习的轨迹较多，可能只能学到一部分。  
 由于没有相位变量的存在，AMP学习出来的策略并不严格跟随参考轨迹，但学习出来的性能仍然很好，而且也让AMP能够更好的处理复杂任务。（后面ETH出了一篇基于AMP的文章 Multi-AMP 就是让一个策略先后学习多个参考轨迹了 通过对参考轨迹采样的方式来选择 ）
 
-## VBC(visual-whole-body-control)
 
-## Quarduped VLA
+# Quarduped VLA
 reference:QUAR-VLA: Vision-Language-Action Model for Quadruped Robots(ICCV 2023 )
 自己构建了数据集，涉及了很多任务(基础感知 goto somewhere 的导航 如卸载背上东西的规划 避障 但没有涉及复杂地形)（多任务 真机数据 模拟数据 很多篇幅在讲这些）  
 VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一个预先训练的视觉语言模型 将里面的 输出的也不是电机指令 是11维度的命令 再喂给端到端的强化学习控制器 这里用了mob的
 ![alt text](image.png)  
 主要两个点：VLM里提取的token会通过一个tokenlearner 压缩维度 然后后面加上位置信息 我们把电机认为是一个一个相互有关系的token 所以会用到mask计算loss  
 类比nlp 生成字是一个字典 找最大概率字的过程 电机的连续值会导致无穷大的字典 所以把电机值分为256个离散的桶 来计算每个桶的概率 用交叉熵作loss 当然 最后传给电机的时候还要作逆离散化
- # WBC for Wheels 
+
+# Deep Whole-body-control
+reference:Deep Whole-Body Control: Learning a Unified Policy for Manipulation and Locomotion(CORL 2022)
+
+![dwbc_pipeline](dwbc_pipeline.png)  
+PPO 但是给arm和leg分别搞了自己的actor和critic网络 两阶段训练 手臂的轨迹是随机采样的 给定一个目标位置 然后插值 带一个轨迹时间 没有用到视觉
+### ppo loss 设计
+既然有两个actor网络 那么优势函数就得合并   
+相对于策略参数θπ的训练目标是：
+$$ J(\theta_\pi) = \frac{1}{|D|} \sum_{(s_t, a_t) \in D} \log \pi(a_{\text{arm}_t} | s_t) (A_{\text{manip}} + \beta A_{\text{loco}}) + \log \pi(a_{\text{leg}_t} | s_t) (\beta A_{\text{manip}} + A_{\text{loco}}) $$
+其中，β是课程参数，它从0线性增加到1，跨越时间步Tmix：β = min(t/Tmix, 1)。Amanip和Aloco分别是基于rmanip和rloco的优势函数。直观地，优势混合通过首先将操控回报的差异归因于手臂动作，将运动回报的差异归因于腿部动作，然后逐渐退火加权优势总和，以鼓励学习有助于运动和操控的手臂和腿部动作。我们通过PPO[21]来优化这个RL目标。
+### 两阶段环境估计设计
+$$ L(θπ, θμ, θφ) = -J(θπ, θμ) + λ||zμ - sg[zφ]||^2 + ||sg[zμ] - zφ||^2 $$
+
+其中 J(θπ, θμ) 是第 2.1 节讨论的强化学习目标函数，sg[·] 是停止梯度操作符，λ 是作为正则化强度的拉格朗日乘子。可以通过使用对偶梯度下降来最小化损失函数：θπ, θμ ← arg minθπ,θμ E(s,a)∼π(...,zμ)[L]。
+θφ ← arg minθφ E(s,a)∼π(...,zφ)[L]，并且 λ ← λ + α ∂L/∂λ 步长为 α。这种优化过程在温和条件下已知会收敛[27, 28]。在实践中，我们通过固定数量的梯度步交替优化统一策略 π 和编码器 μ，以及适应模块 φ。λ 从 0 增加到 1，通过固定的线性方案实现。请注意，RMA[22] 是 Regularized Online Adaptation 的一个特例，在这种情况下，拉格朗日乘数 λ 被设置为常数零，适应模块 φ 仅在策略 π 和编码器 μ 收敛后开始训练。
+# WBC for Wheels 
  reference: Arm-Constrained Curriculum Learning for Loco-Manipulation of the  Wheel-Legged Robot （IROS2024 Oral）
  提出了一种专门为轮腿机器人运动设计的手臂约束课程强化学习框架 同时操控手臂和轮子
  ## 方法
@@ -216,7 +231,10 @@ VLA的训练架构按照RT1的（这里放RT1的训练框架 比较直观） 一
  ### tips
  1。代码只开源了下层 不知道上层模仿学习得到的轨迹好不好（文章中也没怎么提到）
 # VBC(visual-whole-body-control)
-
+reference:Visual Whole-Body Control for Legged Loco-Manipulation(CORL 2024 Oral)
+![vbc pipeline](./vbc_pipeline.png) 
+分阶段训练 先下层通过采样 训一个track 速度的腿部控制器 胳膊的通过IK来算
+再通过teacher-student 训一个上层规划器 输出9维度 6维度为arm关节 2维度为腿部目标速度 1维度为是否夹取
 # LLM for quadruped 
 llm修改奖励函数  
 llm给出 每只脚什么时间与地面接触什么时间抬起  

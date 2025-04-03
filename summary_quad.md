@@ -15,6 +15,10 @@ reference:Learning Quadrupedal Locomotion over Challenging Terrain(ETH 2020 Scie
 #### student policy在学生阶段是会更新的 teacher policy的输出起到监督作用 TCN Encoder也会随着更新
 ![teacher-student-loss](./teacher-student-loss.png)
 
+# MTAC
+reference：MTAC: Hierarchical Reinforcement Learning-based Multi-gait Terrain-adaptive Quadruped Controller （ICRA 2024）
+分层控制 下层训了三个不同的策略 上层寻一个high policy （DRL）来选用哪个策略合适
+
 # ANYmal Parkour
 reference:ANYmal Parkour: Learning Agile Navigation for Quadrupedal Robots (ETH 2023 Science robotics)
 ## 简介
@@ -88,6 +92,13 @@ Gait Encoder 输入为固定步态参数 在平地训练 且在训练时添加AM
 Gait Generator 输入仅为本体状态和速度 在复杂地形上训练 没有AMP和步态强制奖励 也就是说 他鼓励Generator去探索适合的步态隐藏变量 由于限制在统一特征空间下 又能自己探索 实现去学习生成和固定步态类似的特征  （就像是在参考Gait Encoder并在他的基础上自行探索的感觉 很好的思路 而且能防止学崩溃）
 （不过还是个盲狗）
 
+# PAS 模拟概率退火
+reference:SARO: Space-Aware Robot System for Terrain Crossing via Vision-Language Model  
+![PAS ](./pas.png) 
+### 第一阶段
+特权信息4维 环境采样点187个 encode为32维 构成一个36维的隐变量 本体状态45维共同作为obs输入到PPO里 做强化学习  
+### 第二阶段
+本体状态的45维度在过一个LSTM和MLP后对齐为一个36维度的隐藏变量 使用模拟概率退火（概率性选择用一阶段的latent还是这里的latent） 
 # Dreamwaq 
 ![dream ](./dreamwaq.png)   
 reference:DreamWaQ: Learning Robust Quadrupedal Locomotion With Implicit

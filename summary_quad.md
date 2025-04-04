@@ -253,7 +253,7 @@ llm加一些先验知识 给出目标电机位置
 nvidia-smi
 # AUTO_MOB
 ![mob pipeline](./mob_v1.png)  
-
+![alt text](272bc9e8a64d8a7a197543f9928c62f2.jpg)
 
 ## Tricks in reinforce learining
 ### Improving Generalization in Visual Reinforcement Learning via Conflict-aware Gradient Agreement Augmentation

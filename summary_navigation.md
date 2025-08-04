@@ -36,4 +36,28 @@ RSS 2025
 下层用了rl的控制器 就是extreme parkour  
 上层是一个计算代价的规划器 把视觉图像分块 计算障碍物成本 语义的地形可通过成本 以及下层控制器那个critic的运动成本也用上 把每一个patch的每一个成本都算出来 然后每规划一次都计算成本 然后随机采样点 选择最好的那个点 交给下层去做     
 选出点后 交给rl去跑
-## 感觉和上一篇一样 其实都是考虑了机器人的动力学的感觉 上一篇考虑了成功率 用了一个正常的x y w的速度跟踪模型 这一篇则考虑的是critic的运动值 给一个yaw拿给extreme parkour去跑
+#### 感觉和上一篇一样 其实都是考虑了机器人的动力学的感觉 上一篇考虑了成功率 用了一个正常的x y w的速度跟踪模型 这一篇则考虑的是critic的运动值 给一个yaw拿给extreme parkour去跑
+
+# Learning Robust Autonomous Navigation and Locomotion for Wheeled-Legged Robots
+ETH 2024 sci robotics    
+重建高程图有延迟 所以高程图范围不能大  
+任务:在一条预设的全局路径自主行驶 全局地图预先建好 在地图上随机标点 a*规划一下 然后让机器人自主行驶 能达到一个长程导航的效果  
+pipeline：整体是一个分层框架 上下层分开训练 先训底层 底层训练好后冻结训练上层  
+上层规划器： 不显式输出规划的航点 而是直接输出有界速度命令（为此使用beta分布而非高斯分布）输入为高程图（利用相机和视觉建立的） 高程图两次历史 底层策略encoder出的隐藏状态 位置记忆缓冲区（预建图所以有世界坐标系下的访问位置（预先建好稠密点云 利用imu和编码器历史去匹配点云定位）和停留时间数） 航点与动作历史（保证平滑）  训练的时候随机采样目标点去跟踪
+下层规划器： 来自22年sci robot的low level controler 用attention + RNN做的一个actor网络
+
+# ANYmal Parkour: Learning Agile Navigation for Quadrupedal Robots
+三个模块 感知模块 运动模块 导航模块   
+运动模块训练五个策略 导航模块利用感知模块的向量选择要用的技能  
+2m/s 在每个时间步能选择技能 
+
+导航模块了解每种技能的能力和局限性 来调整轨迹？  
+相当于建立一个概率函数 选择高概率的路径  
+### perception module
+用了深度摄像头和雷达获取点云信息 重建地形 附录里有一些点云的具体描述
+六个realsense深度摄像头 和一个雷达 融合点  
+具体的重建上离的近的地方高分辨率 远的地方低分辨率
+### locomotion module
+每个策略是单独训练的 用的是基于位置的命令 输入是goal position 以及到达需要的时间 接受的perception输入来自perception module的高程图
+### navigation module
+也是用强化学习训练的 训练的时候locomotion module全部冻结 最后得到一个每个动作的概率分布 最终部署的时候是选择最高概率  接受的perception输入来自perception module的体素地图

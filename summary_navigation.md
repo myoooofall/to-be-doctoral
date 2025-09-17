@@ -27,12 +27,16 @@ Iplanner本质上训练用的是简化的立方体几何模型 这里使用了�
 
 # Learned Perceptive Forward Dynamics Model for Safe and Platform-aware Robotic Navigation
 RSS 2025
-考虑了机器人本体动力学　整体框架仍然是一个mpc的规划器　在给定机器人一个序列状态　和一个目标点的情况下规划出一条action　序列　（ＭＰＰＩ方式优化　reward设计）　　
+![alt text](/navigation//image.png)
+考虑了机器人本体动力学　整体框架仍然是一个mpc的规划器　在给定机器人一个序列状态　和一个目标点的情况下规划出一条action　序列　（ＭＰＰＩ方式去规划 对规划出的不同序列计算　reward（非强化学习 可以理解为直接计算代价））　　
 这个序列状态　设计了一个动力学模型去预测　在已知当前和历史状态的情况下预测未来状态　这个模型要提前利用仿真数据和现实数据训练 也就是说 用一个已经训练好的rl locomotion 模型去跑 然后预测出一个模型来 可以根据已有观测预测未来机器人的位置 成功率什么的 这个预测出来的状态序列作为mppi规划的参数   
-然后得到一系列点后 rl就可以跑了 部署 
+然后得到一系列序列后 rl就可以跑了 部署
+MPPI 输出的 a 就是机器人在下一个控制周期（论文里 0.5 s）要执行的一条 三维速度指令：
+a = [v_x, v_y, ω_z]^T 
 
 # TOP-Nav: Legged Navigation Integrating Terrain,Obstacle and Proprioception Estimation
-RSS 2025
+RSS 2025  
+![alt text](/navigation/top-nav.png)
 下层用了rl的控制器 就是extreme parkour  
 上层是一个计算代价的规划器 把视觉图像分块 计算障碍物成本 语义的地形可通过成本 以及下层控制器那个critic的运动成本也用上 把每一个patch的每一个成本都算出来 然后每规划一次都计算成本 然后随机采样点 选择最好的那个点 交给下层去做     
 选出点后 交给rl去跑
@@ -41,12 +45,14 @@ RSS 2025
 # Learning Robust Autonomous Navigation and Locomotion for Wheeled-Legged Robots
 ETH 2024 sci robotics    
 重建高程图有延迟 所以高程图范围不能大  
-任务:在一条预设的全局路径自主行驶 全局地图预先建好 在地图上随机标点 a*规划一下 然后让机器人自主行驶 能达到一个长程导航的效果  
+任务:在一条预设的全局路径自主行驶 全局地图预先建好 在地图上随机标点 dij*规划一下 然后让机器人自主行驶 能达到一个长程导航的效果  
+![alt text](/navigation/wheeled.png)
 pipeline：整体是一个分层框架 上下层分开训练 先训底层 底层训练好后冻结训练上层  
 上层规划器： 不显式输出规划的航点 而是直接输出有界速度命令（为此使用beta分布而非高斯分布）输入为高程图（利用相机和视觉建立的） 高程图两次历史 底层策略encoder出的隐藏状态 位置记忆缓冲区（预建图所以有世界坐标系下的访问位置（预先建好稠密点云 利用imu和编码器历史去匹配点云定位）和停留时间数） 航点与动作历史（保证平滑）  训练的时候随机采样目标点去跟踪
 下层规划器： 来自22年sci robot的low level controler 用attention + RNN做的一个actor网络
 
 # ANYmal Parkour: Learning Agile Navigation for Quadrupedal Robots
+![alt text](/navigation/animal-parkour.png)
 三个模块 感知模块 运动模块 导航模块   
 运动模块训练五个策略 导航模块利用感知模块的向量选择要用的技能  
 2m/s 在每个时间步能选择技能 
@@ -61,3 +67,23 @@ pipeline：整体是一个分层框架 上下层分开训练 先训底层 底层
 每个策略是单独训练的 用的是基于位置的命令 输入是goal position 以及到达需要的时间 接受的perception输入来自perception module的高程图
 ### navigation module
 也是用强化学习训练的 训练的时候locomotion module全部冻结 最后得到一个每个动作的概率分布 最终部署的时候是选择最高概率  接受的perception输入来自perception module的体素地图
+
+# some thinking
+low-cost:eth那几篇导航 尤其是sci robot的 传感器用的太多了   
+现在的训练方式往往是上下层分层 冻结起来
+intergrating learning based locomotion part ：
+下层能够传递地形感知进来   
+也能传递本体状态（受力大小） robot-guide  
+以及运动评分进来 -critic（甚至是部分评分）-multi critic
+
+task:转角
+全部观测可知 动力学模型可用 
+
+# FrontierNet: Learning Visual Cues to Explore
+we define a frontier as a region of free space that directly borders unexplored space  
+紧邻未探索区域的自由空间区域 利用信息增益指标判断每个frontier增大探索空间的探索潜力  
+预先建图去给模型去做监督  模型的值拿来做规划 可以最大化从一个未知环境不断探索frontier 直到获取整张地图  
+
+#
+frontier 定义为已知区域与未知区域之间的边界  
+通过冻结视觉基础模型 训练decoder 得到每个frontier的可负担分数 然后纳入规划

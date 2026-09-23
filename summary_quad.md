@@ -262,3 +262,168 @@ nvidia-smi
 ## Multi-critic Learning for Whole-body End-effector Twist Tracking
 ETH teacherstudent框架 主要加了一个multi critic 把奖励分为三组  
 就是对轨迹 命令进行采样 然后去跟踪 （task的创新点上不仅跟踪位姿 还额外注意了跟踪末端执行器的速度（twist））
+
+# Legolas：Deep Leg-Inertial Odometry
+
+- reference: Legolas: Deep Leg-Inertial Odometry（CoRL 2024）
+- 作者单位：UIUC、CMU
+- 任务类型：四足机器人本体感知里程计；不是 locomotion policy，也不是强化学习控制器
+- 训练方式：Isaac Gym 中采集带位姿真值的数据，再做监督回归；zero-shot sim-to-real
+- 真机：Unitree Go2、DEEP Robotics Lite3；室内和室外测试
+
+## 一句话概括
+
+Legolas 使用最近 1 秒的 IMU、关节状态、速度命令和关节动作历史，直接回归机器人在最近 0.02 秒内的 6-DoF 相对位姿变化，再逐帧积分成轨迹。训练标签全部来自 Isaac Gym/PhysX，不采集真机训练数据；真机上的 MoCap、RTK-GPS 或 LiDAR-SLAM 只用于测试和评价。
+
+## 它解决的任务是什么
+
+里程计需要回答的是：机器人相对上一时刻移动了多少，而不是机器人在世界中的绝对位置是多少。Legolas 在 50 Hz 下预测机体系下的增量运动：
+
+$$
+\Delta P_t=(\Delta x,\Delta y,\Delta z,\Delta R),
+$$
+
+其中平移是 3 维，旋转采用连续的 6D rotation representation。把每一步的 $SE(3)$ 增量连续相乘，就得到从任意初始原点出发的完整轨迹：
+
+$$
+P_t=P_0\Delta P_1\Delta P_2\cdots\Delta P_t.
+$$
+
+因此它属于 **relative odometry / state estimation**：
+
+- 不输出 12 个电机目标，也不改变原有四足 locomotion controller。
+- 不感知障碍物、不建图、不规划路径，也不直接完成导航任务。
+- 它可向控制器或 SLAM 提供位姿增量；当视觉里程计因快速晃动、反光或光照变化丢失时，可作为不依赖视觉的运动先验。
+- 单独使用时没有绝对位置观测和回环修正，所以长期积分漂移不可避免。
+
+## 输入、输出和网络
+
+每个时刻的观测为 44 维：
+
+| 输入 | 维度 | 含义 |
+|---|---:|---|
+| IMU 陀螺仪 | 3 | 机体角速度 |
+| IMU roll、pitch 估计 | 2 | 已经过机载 IMU 姿态算法处理的横滚和俯仰；并不是完全原始的 IMU 数据 |
+| 速度命令 | 3 | $v_x^{cmd},v_y^{cmd},\omega_z^{cmd}$ |
+| 12 个关节角 | 12 | 腿部本体状态 |
+| 12 个关节速度 | 12 | 腿部本体状态 |
+| 上一时刻的期望关节角动作 | 12 | locomotion policy 发出的控制目标，而非实测力矩 |
+
+将最近 $H=50$ 帧堆叠，即输入 1 秒历史，预测最后 0.02 秒的运动。主干是 1D ResNet；部署版由 3 个 residual blocks 缩为 2 个，参数量由 4.7M 降为 1.5M。Go2 上按 50 Hz 使用，在 Jetson Orin Nano 上网络本身最高可运行约 600 Hz。
+
+网络主要输出：
+
+- 3 维平移增量；
+- 6D 表示的旋转增量；
+- 上述 9 个量各自的方差，用于表达异方差不确定性；
+- 额外的 1 维 stationary/moving mask，用于零速度更新。
+
+这里预测的是各分量方差，不能把它理解成含全部相关项的完整 $9\times9$ 协方差矩阵。
+
+## 数据是怎么得到的
+
+1. 在 Isaac Gym 中加载相应机器人的 URDF，并用一个在仿真和真机上都可执行的 robust locomotion policy 驱动机器人。
+2. 数千个环境并行运行，地形包含平地、崎岖地面、绊倒物、斜坡和楼梯等。
+3. 线速度命令从 $[-2,2]$ m/s 范围采样，yaw 角速度从 $[-\pi,\pi]$ rad/s 采样；还特意加入站立、原地旋转和直行数据。
+4. PhysX 直接给出每一帧机器人的真实 $SE(3)$ pose，邻帧真值 $Q_{t-1}^{-1}Q_t$ 就是监督标签。
+5. 采集 13.7M 个 Go2 样本，约等于 160 个机器人日的数据，实际并行采集约 48 小时。之后再给陀螺仪、roll/pitch、关节角和关节速度加入均匀噪声。
+6. Go2 和 Lite3 的流程相同，但更换 URDF、locomotion policy 和数据集，分别训练模型；它不是一个模型直接通用于所有机器人。
+
+论文列出了传感器加噪和地形多样化，但没有像典型 locomotion sim-to-real 工作那样清楚报告质量、惯量、电机、摩擦等系统性的 domain randomization。因此其迁移主要依赖大规模运动覆盖、传感器噪声以及 PhysX 与真机动力学足够接近。
+
+## 损失函数与 zero-velocity update
+
+训练目标不是比较整条累计轨迹，而是把每个时间步当作独立样本，比较预测增量 $\Delta P_t$ 与仿真真值增量 $\Delta Q_t$。这样不会让某一步的累计漂移反向影响后面的所有样本，也适合构造大规模离线监督数据集。
+
+训练开始使用 MSE；稳定后改用 Gaussian maximum-likelihood loss：
+
+$$
+\mathcal L \sim \frac{1}{2}\log |\hat\Sigma_t|+
+\frac{1}{2}e_t^T\hat\Sigma_t^{-1}e_t.
+$$
+
+网络既要预测运动，也要预测自己的不确定度：误差大而方差报得过小会被强烈惩罚，单纯把方差无限放大又会受到 $\log|\Sigma|$ 项惩罚。
+
+只回归微小位移时，即使机器人静止，每帧极小的非零误差也会持续积分成漂移。作者因此加入 moving/stationary mask：预测静止时直接采用零位移；若把实际运动误判为静止，则以真实增量的大小惩罚它。这个机制主要消除 **站立阶段的伪运动漂移**，并不能消除机器人持续行走时的长期累计漂移。论文对 mask 的独立分类监督、连续门控还是硬阈值等实现细节写得不够充分，是复现时需要进一步检查代码的地方。
+
+## 为什么只靠这些量能够估计位移
+
+网络并不是从 IMU 做纯粹的两次积分。它学习的是特定机器人和步态控制器下的运动映射：
+
+$$
+(\text{速度命令},\text{上一动作},q,\dot q,\text{角速度},R_{rp})_{t-49:t}
+\longrightarrow \Delta SE(3)_t.
+$$
+
+关节角和关节速度体现腿的实际响应，上一关节目标和速度命令体现控制器打算怎样运动，IMU 则提供机体旋转信息。网络在大量仿真数据中隐式学习腿运动与机体位移的对应关系，包括一定程度的滑移和崎岖地形效应。
+
+这同时也是它最重要的限制：消融中删掉上一动作造成的退化最大，作者也明确承认，部署时若换成与训练不同的 locomotion policy，里程计会明显变差。换句话说，它并非真正 controller-agnostic 的通用状态估计器，而是与训练步态分布强耦合的 learned motion model。
+
+## 实验与结果
+
+### 真值如何获得
+
+- 室内：主要用 motion capture；无法覆盖时用 LiDAR-SLAM。
+- 室外：使用 RTK-GPS；GPS heading 不够准确，因此室外不报告 RPE@1m。
+- 这些外部传感器只用于生成测试真值，不是 Legolas 部署输入。
+
+主文测试了 11 个室内和 5 个室外场景；室内平均轨迹约 24 m，室外约 325 m，覆盖地毯、石材、楼梯、混凝土、泥土、草地和雨后湿滑地面。
+
+### 对比方法
+
+- EKF：基于 Cerberus 的解析腿—惯性滤波器，为 Go2 修改运动学模型并人工调参。
+- BC：用 90,000 个真机样本训练、结构和损失与 Legolas 相同的行为克隆基线。
+- VINS-Fusion：使用额外的双目图像和 IMU，并经过标定和调参，只成功用于室内比较。
+- Ours w/ Go1：在 Go1 仿真数据上训练，再直接放到 Go2，测试跨相近机型迁移。
+
+室内 RPE@1m：EKF 0.38、BC 0.81、Go1 模型迁移到 Go2 为 0.12、标准 Legolas 为 0.11、VINS-Fusion 为 0.09。作者据此报告，相比 EKF 的 relative pose error 降低约 73%，相比真机 BC 降低约 87.5%，并接近室内视觉惯性里程计。室外 VINS-Fusion 因强光、快速机体转动等问题未能稳定部署，Legolas 的累计轨迹误差优于 EKF 和 BC。
+
+还在 Lite3 上完成了真机迁移，但 Lite3 结果主要是轨迹可视化，没有像 Go2 一样完整的量化基线比较。作者也展示了将 Legolas 的里程计和方差接入 RTAB-Map：视觉跟踪失效时，Legolas 提供运动先验使建图能够继续。
+
+### 关键消融
+
+完整输入的仿真验证 RPE@1m 为 0.05。删除任一输入都会变差：
+
+- 去掉上一动作后，ATEo 增加约 484%，说明网络高度依赖控制器输出；
+- 去掉关节本体感知后，ATEo 增加约 364%；
+- 去掉 IMU 后，ATEo 增加约 258%；
+- 只使用 IMU 时，ATEo 相比完整系统增加约 478%。
+
+旋转表示也做了消融：6D rotation 的 RPE@1m 为 0.050，优于 $\log(SE(3))$ 的 0.085 和 Euler yaw-pitch-roll 的 0.233。网络从 4.7M 缩至 1.5M 参数后，RPE 略从 0.045 变为 0.050，但运行速度显著提高。
+
+## 论文的真正贡献
+
+1. 将四足 leg-inertial odometry 改写成大规模仿真监督学习问题，不再在估计器中显式写足端接触、无滑移假设和机器人运动学更新。
+2. 证明只用仿真标签训练的相对位姿回归网络，可以 zero-shot 部署到两个真机平台，并在 Go2 上显著超过解析 EKF 与小规模真机监督基线。
+3. 将上一动作和速度命令作为运动先验，与 IMU、关节历史联合估计，比 IMU-only learned odometry 更有效。
+4. 输出运动相关的不确定度，并通过静止 mask 抑制站立时的积分漂移，便于接入 SLAM。
+
+## 需要谨慎看待的地方
+
+- **“纯数据驱动”有边界。** 它表示在线估计器中没有显式运动学、接触和滤波模型；但训练数据仍来自加载了 URDF、刚体动力学、摩擦模型和 locomotion policy 的 PhysX。物理先验只是被放进仿真器并隐式蒸馏到网络，而不是彻底消失。
+- **不等于全局定位。** 无地图、GPS、视觉或 LiDAR 修正时，任意纯本体里程计都会累计漂移，Legolas 本身也没有回环或漂移消除机制。
+- **策略依赖明显。** 上一动作是最重要输入，而且论文承认换步态策略会失败；对新 gait、受损电机、负载变化和剧烈滑移的泛化仍不充分。
+- **跨机器人泛化被标题容易夸大。** Go2 与 Lite3 使用各自的数据和各自模型；Go1→Go2 只证明了相近四足平台间有一定迁移能力，并非一个 universal embodiment model。
+- **BC 对比并不完全隔离“仿真 vs 真机”的因素。** BC 只有 90k 样本，而 Legolas 有 13.7M 样本，约相差 152 倍；优势同时来自数据规模、地形覆盖和仿真标签，不应只归因于仿真训练方式。
+- **视觉比较不是同一传感器条件。** VINS-Fusion 多用了双目相机；它室内略好，室外失败说明两者更适合互补，而不能简单得出 learned proprioceptive odometry 全面超过视觉里程计。
+- **仿真限制仍存在。** 作者列出的限制包括简化足地接触、有限的传感器模型和没有动态障碍；真机 Lite3 量化也不充分。
+
+## 对四足 RL 感知控制的启发
+
+Legolas 最合适的定位不是替代 RL locomotion，而是作为其旁路 state estimator：
+
+```text
+IMU + joint state + command/action history
+                    ↓
+              Legolas odometry
+                    ↓
+      local pose / velocity prior + uncertainty
+          ↙                         ↘
+   visual/LiDAR SLAM          navigation/controller
+```
+
+对端到端视觉导航，比较值得借鉴的方向是把相对位姿预测作为 auxiliary task，或在视觉暂时失效时根据预测方差切换到本体里程计。但若控制策略持续在线变化，不能直接照搬固定 policy 下的训练数据；需要把 gait/policy variation、质量负载、足地摩擦和 actuator fault 加入训练分布，或者联合训练 locomotion policy 与 odometry encoder。
+
+### 最终判断
+
+这是一篇 **状态估计 / sim-to-real supervised learning** 论文，不是 RL 运控论文。其亮点是用大规模仿真数据获得了实际可用的无视觉四足里程计；最关键的学术风险则是对动作和既定 locomotion policy 的强依赖。它适合当作视觉惯性系统的 fallback 或融合因子，但不能单独承担长期全局定位、建图和导航。

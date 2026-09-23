@@ -25,6 +25,228 @@ PLANNING NETWORK 还会预测一个路径碰撞概率 用二元交叉熵和真�
 在Iplaner的基础上加入了语义图像 也是可微分的 一起训练 语义图像会被预处理   
 Iplanner本质上训练用的是简化的立方体几何模型 这里使用了四足机器人 而且可以通行阶梯这种 （maybe因为语义信息） 但这几篇文章其实都没有考虑到机器人本身的动力学 就是作为一个移动agent 另外 和iplanner的区别是这里的运动用了RL模型 Iplanner是mpc viplanner可以在isaac lab上跑
 
+# You Only Plan Once: A Learning-Based One-Stage Planner With Guidance Learning
+IEEE Robotics and Automation Letters (RA-L), Vol. 9, No. 7, July 2024  
+YOPO = You Only Plan Once 作者借鉴YOLO（You Only Look Once）的思想：不是先建图、再搜索、再优化，而是一次网络前向同时生成多条候选轨迹及其score  
+这篇是quadrotor视觉局部规划/避障论文，不是腿臂协同，但方法上对“把传统pipeline压成一个可学习模块”很有参考价值  
+代码：原文写will be released at https://github.com/TJU-Aerial-Robotics/YOPO  
+
+#### 解决什么问题
+传统无人机视觉导航通常是三段式pipeline：  
+1）perception and mapping：深度图/点云建局部地图或ESDF  
+2）front-end path searching：搜索一条或多条初始路径  
+3）back-end trajectory optimization：把路径优化成平滑、安全、动力学可行的轨迹  
+
+问题是：  
+stereo/depth camera感知范围短且噪声大 建图和ESDF更新有延迟  
+前端拓扑搜索 + 后端多轨迹优化计算量大 高速飞行时延迟很致命  
+规划本身是multi-modal的 同一个障碍可以左绕/右绕/上绕 只学一个expert label容易mode collapse  
+模仿学习依赖expert 上限受expert限制；RL reward稀疏、慢、难收敛  
+
+YOPO的目标是：  
+在没有显式地图的推理阶段，仅用noisy depth image + 当前状态 + goal direction，一次网络前向输出多条局部轨迹，直接用于高速避障  
+
+#### 实现了什么任务
+任务是quadrotor在障碍密集环境中高速自主飞行  
+仿真：Flightmare森林环境，树和低矮灌木，速度从2m/s到10m/s，比较不同障碍密度下的成功率/安全距离/平滑性/延迟  
+真实：250mm小四旋翼，RealSense D455深度相机，Xavier NX机载计算，在dense forest里飞行，最高速度5.52m/s  
+真实实验中地图只用于可视化，不参与在线规划  
+
+#### 总体pipeline
+输入：depth image + 当前速度/加速度 + goal direction  
+输出：多条候选polynomial trajectories的offsets、末端速度/加速度、score  
+部署时选择score最高的一条，解成2秒receding-horizon五阶多项式轨迹，只执行其中1/30，然后下一帧重新规划  
+参考轨迹以50Hz离散给geometric controller跟踪  
+
+整体逻辑：  
+1）预定义一组motion primitives作为anchors  
+2）网络对每个primitive预测局部offset和end-derivatives  
+3）用预测结果把primitive refine成一条五阶多项式轨迹  
+4）网络同时预测score  
+5）选最高score轨迹执行  
+
+它把传统规划里的三个模块对应压进了网络：  
+perception/mapping -> ResNet-18从深度图提特征  
+front-end search -> 多个motion primitive anchors覆盖解空间  
+back-end optimization -> 网络预测offsets和末端导数，相当于一次前向完成局部优化  
+
+#### Motion primitives怎么设计
+作者把相机FOV划成 M_phi x M_theta 个grid  
+每个grid对应一个motion primitive anchor  
+primitive不是完整轨迹，而是body frame下一个固定半径r上的候选末端点：  
+p = (r cos(theta) cos(phi), r cos(theta) sin(phi), r sin(theta))  
+直观理解：在相机可见空间里均匀撒一些候选飞行方向/末端点  
+
+网络不是从零生成轨迹，而是对每个anchor预测：  
+delta theta / delta phi / delta r：修正末端位置  
+end velocity / end acceleration：轨迹末端速度和加速度  
+score：这条轨迹有多好  
+
+这样可以显式保留multi-modality：不同grid负责不同方向的候选解，不容易所有输出塌缩到同一条轨迹  
+
+#### 网络结构
+输入depth image分辨率实验中缩放到160x96  
+backbone是改过的ResNet-18  
+输出是 M_phi x M_theta x M_d 的tensor  
+真实和仿真里用5x3个grid，所以一次预测15条候选轨迹  
+M_d=10：3个offset、3个末端速度、3个末端加速度、1个score  
+
+作者用了fully convolutional head和shared weights  
+但规划不像目标检测那样平移不变：左边grid和右边grid即使看到类似特征，期望offset方向也不同  
+所以他们引入primitive frame，把当前状态和goal direction变换到每个primitive自己的局部坐标系里，再拼到对应feature位置  
+这样每个grid的预测语义更一致  
+
+#### Guidance Learning怎么训练
+Guidance Learning是作者提出的训练方法  
+它不是模仿学习，也不是RL  
+核心思想是：传统trajectory optimization已经能从ESDF map算出轨迹cost对轨迹参数的数值梯度；作者把这个数值梯度继续通过chain rule反传到神经网络参数  
+
+这里容易误解成PPO/强化学习 但其实不是  
+它没有actor-critic rollout 没有value function 没有PPO clipping 也没有通过episode reward去估计policy gradient  
+训练时确实有一个类似critic的东西：ESDF map + cost function会评价网络输出的轨迹好不好  
+但这个“critic”不是学出来的神经网络 而是传统规划里的可计算代价函数/梯度评价器  
+所以更准确的说法是：用传统规划的优化目标和梯度作为先验 来训练一个前向网络近似规划/优化过程  
+
+训练时有privileged information：  
+真实/仿真环境的point cloud和ESDF map  
+完整无人机状态  
+这些只用于计算轨迹cost和gradient  
+
+推理时没有这些privileged信息：  
+网络只能看到noisy depth image、当前速度/加速度、goal direction  
+
+cost由三部分组成：  
+smoothness cost：约束多项式轨迹导数积分，让轨迹平滑  
+safety cost：从ESDF查询轨迹点到最近障碍的距离，距离障碍近就惩罚  
+goal cost：让轨迹末端靠近临时目标方向  
+
+训练时不需要expert label  
+对每个网络预测的轨迹，根据ESDF计算真实cost J和对end-state的数值梯度  
+对offset和end-derivatives直接用这个梯度训练  
+score则监督成 -J，用SmoothL1 loss  
+只训练score超过阈值的end-states，避免坏轨迹梯度干扰；但所有primitive的score都会训练  
+
+这件事解决了两个问题：  
+比模仿学习更真实，因为优化目标就是安全/平滑/朝目标，而不是和expert轨迹距离近  
+比RL更直接，因为每条轨迹立刻得到数值梯度，不需要长期trial-and-error  
+
+#### 和模仿学习/RL的区别
+普通模仿学习是：  
+传统planner先输出一条expert trajectory作为label  
+网络预测轨迹  
+loss通常是预测轨迹和expert轨迹之间的距离  
+这样的问题是 多模态规划会被压成单一答案：比如障碍左绕和右绕都可行 但expert只给左绕 右绕也会被loss惩罚  
+
+YOPO更像是：  
+网络自己先输出多条候选轨迹  
+传统ESDF cost评价每条轨迹是否安全、平滑、朝目标  
+cost gradient告诉网络每条轨迹应该往哪里改  
+所以它学习的是cost landscape / optimization direction 而不是expert最后选中的某一条轨迹  
+
+可以简单理解为：  
+imitation learning 学expert的答案  
+YOPO学传统优化器的代价结构和优化方向  
+RL通过环境试错学reward最大化  
+
+这也是为什么YOPO可以保留多模态候选：  
+左绕、右绕、上绕只要cost低 都可以被认为是好轨迹  
+网络不会因为没有贴近某一条expert label而被惩罚  
+
+#### 网络到底输出什么
+网络不是直接输出完整轨迹点序列  
+也不是直接输出五阶多项式的所有系数  
+它对每个motion primitive输出10个数：  
+delta theta / delta phi / delta r：修正primitive末端位置  
+end velocity：末端速度3维  
+end acceleration：末端加速度3维  
+score：这条候选轨迹的评分  
+
+因此每个primitive的输出可以理解成五阶多项式的终点边界条件  
+起点边界条件来自当前无人机状态：当前位置、速度、加速度  
+终点边界条件来自网络：修正后的末端位置、末端速度、末端加速度  
+时间窗口T固定  
+然后通过边界值问题解析求解五阶多项式系数  
+
+所以完整链条是：  
+depth image + state + goal direction  
+-> 网络输出15组primitive修正量/末端导数/score  
+-> 每组转成一条五阶多项式轨迹  
+-> 训练时用ESDF cost和gradient更新网络  
+-> 部署时选score最高的轨迹执行一小段 再下一帧重规划  
+
+#### Privileged learning
+训练时用完美地图/ESDF指导网络，部署时只用深度图  
+作者认为这能让网络学到对深度噪声更鲁棒的模式  
+传统gradient-based planner如果建图不完整或初始化不好，可能直接被局部极小值困在障碍里  
+YOPO因为训练时看过privileged ESDF的梯度，学到的前向预测不完全受当前噪声深度图限制  
+
+数据采集：  
+在Flightmare中随机reset无人机状态，收集100K个positions / orientations / depth images  
+positions和orientations只用于训练时算gradient  
+先训练50 epochs，再用DAgger进一步fine-tune  
+因为没有expert label，同一张depth sample可以随机初始化多种state和goal做数据增强，不需要重新标注  
+
+#### 实验结果
+训练策略验证：  
+和经典gradient-based expert用同一个cost函数比较  
+网络平均cost比expert更低，最优cost接近expert  
+延迟比expert低10倍以上，因为网络并行预测全部轨迹，而优化方法需要逐条迭代  
+
+仿真对比：  
+baseline包括TopoTraj（Fast Planner with Topological Paths）、MPPI Planner with Hybrid A*、Agile Autonomy  
+YOPO推理约1.6ms，总体处理延迟显著低于传统建图/搜索/优化方法  
+在4m/s、不同树密度下，YOPO安全距离最好，平滑性也有竞争力  
+速度从2到10m/s变化时，learning-based方法整体比传统vision-based planner成功率更高  
+YOPO在6m/s以下通常优于Agile Autonomy，因为它一次预测更多不同primitive候选；更高速度/极密场景下Agile Autonomy有时更强，因为YOPO训练里考虑smoothness会牺牲一部分安全性  
+
+真实部署：  
+RealSense D455提供87deg x 58deg FOV、约6m深度范围  
+VINS-Fusion做视觉惯性里程计  
+TensorRT部署到Xavier NX，机载推理约16ms  
+dense forest密度约1/10 tree/m2，树直径约0.25m，最高速度5.52m/s  
+
+#### limitation / future work
+这篇没有明确展开future work，但从方法边界看：  
+任务是quadrotor局部避障，不是长程导航，也不是带动力学接触的机器人任务  
+依赖深度相机，强光/玻璃/细小枝叶/深度缺失仍可能影响输入  
+训练需要privileged ESDF map和仿真数据，真实部署效果依赖sim-to-real的深度图分布  
+输出仍是短时局部轨迹，需要外部goal direction和状态估计；全局目标规划不在本文解决  
+真实实验主要是森林直行/局部避障，没有复杂语义目标或动态障碍  
+
+更准确地说 它解决的是local planner / reactive obstacle avoidance  
+网络输入里有goal direction 但这个goal direction不是网络自己从图像中识别出来的目标  
+它需要外部模块或任务给定一个方向：例如全局目标投影到局部坐标系后的单位向量  
+因此它不需要“看到最终目标物体” 但它需要一直知道当前应该朝哪个方向飞  
+
+它的规划空间也被限制在当前深度相机FOV和固定时间窗口里：  
+motion primitives只在可见空间里采样  
+每次预测2秒receding-horizon trajectory  
+实际只执行其中1/30 再下一帧重规划  
+所以它更像高速无人机局部反应式规划器 不是能解决迷宫/死胡同/长程拓扑决策的navigation system  
+
+如果遇到长走廊分岔、U形障碍、迷宫、需要绕到背后的目标 仅靠YOPO本身不够  
+它没有记忆地图 没有frontier/global planner 没有语义目标搜索 也不会主动探索未知区域  
+这类长程任务仍然需要外部全局规划/拓扑图/SLAM/探索模块给它连续的局部goal direction  
+
+为什么它特别适合无人机：  
+无人机高速飞行时主要瓶颈是短视距内快速避障和低延迟重规划  
+环境中的障碍通常是树、柱、灌木这类局部几何障碍  
+只要大方向已知 无人机可以通过连续局部绕障完成穿越  
+腿足长程导航则不同：不仅要绕障 还要考虑地形可通行性、落足/身体动力学、狭窄通道、楼梯/台阶、死胡同和长程记忆  
+所以YOPO的思想可以借鉴 但不能直接替代腿足机器人的long-horizon navigation  
+
+#### 对我们的启发
+这篇对腿臂协同不直接相关，但有一个很重要的方法启发：  
+如果任务本身有传统优化器能提供cost/gradient，就不一定要做纯模仿或纯RL  
+可以把传统优化器的数值梯度当作training guidance，让网络在推理时一次前向近似“搜索+优化”  
+
+放到狗+臂里可以类比：  
+motion primitive anchors可以变成base stance / body posture / arm reaching direction候选  
+score可以表示某个全身姿态-抓取轨迹的安全性、可达性、稳定性  
+training时用privileged object state、collision map、reachability/cost gradient训练  
+deployment时只用机载视觉和本体状态快速输出多种候选whole-body action  
+这比只蒸馏单一expert轨迹更适合处理多模态任务，比如左侧绕过去抓/右侧绕过去抓/蹲下抓/抬前身抓都可行  
+
 # Learned Perceptive Forward Dynamics Model for Safe and Platform-aware Robotic Navigation
 RSS 2025
 ![alt text](/navigation//image.png)

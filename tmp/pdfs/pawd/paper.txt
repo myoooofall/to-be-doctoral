@@ -1,0 +1,760 @@
+=== PAGE 1 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED SEPTEMBER, 2026 1
+From Policy Actions to Whole-Body Dynamics: A Unified
+Projection-Based Framework for Versatile Legged Loco-Manipulation
+Chengzhen Yan1, Qingchen Liu1, Jiahu Qin1, Yiming Jiang1, and Yang Shi2
+Abstract—Learning-based locomotion policies are widely
+adopted for legged robots but face integration challenges with
+model-based whole-body optimization for loco-manipulation, as
+they output joint-space commands instead of dynamics-level
+variables that enable explicit enforcement of rigid-body dynamics
+and contact objectives. To resolve this, we introduce Policy Action
+Dynamics Projection (PADP), an optimization-based dynamics
+projection that maps joint-space policy outputs into contact-
+consistent whole-body variables (i.e., generalized accelerations,
+contact wrenches, and joint torques) while satisfying rigid-body
+dynamics and contact conditions. Building on this dynamics-
+level interface, we further develop a unified loco-manipulation
+controller that directly leverages a generic pretrained locomotion
+policy and integrates model-based manipulation tasks in a sub-
+sequent unified whole-body QP. This formulation enables precise
+and coordinated whole-body loco-manipulation performance that
+goes far beyond the policy’s original command space without re-
+training. Simulation and hardware experiments on both point-foot
+and wheeled-foot quadruped manipulators demonstrate stable Fig. 1. Selected demonstrations of the LYNX M20 across locomotion and
+dynamic loco-manipulation with improved agility and precision loco-manipulation tasks in different environments.
+over conventional whole-body control baselines.
+space makes it difficult to directly specify and realize task-
+Index Terms—Legged robots, whole-body optimization, mobile space manipulation objectives under changing interactions,
+manipulation. such as contact force and wrench regulation. As a result,
+end-to-end policies offer limited post-deployment adaptability,
+I. INTRODUCTION
+since modifying objectives, constraints, or interaction priorities
+L
+EGGED robots are increasingly expected to go beyond
+often requires retraining or extensive fine-tuning, and they
+mobility and execute loco-manipulation tasks [1], as il-
+typically require learning locomotion and manipulation jointly
+lustrated in Fig. 1, since they enable contact-rich manipulation
+from scratch.
+while maintaining agile traversability over diverse terrains [2],
+Another strategy is to decouple loco-manipulation into sepa-
+[3].
+rate modules, since locomotion remains challenging for purely
+A direct approach is to train an end-to-end learning-based
+model-based optimization. A common design is therefore to
+policy for loco-manipulation [4]–[6]. Such policies can achieve
+combine a learned locomotion prior with a separate manipu-
+impressive coordination and even demonstrate unified position
+lation module, e.g., by stacking a manipulation policy on top
+and force control with compliant interaction behaviors [7],
+of a learned locomotion policy [9], [10] or learning residual
+[8]. However, manipulation tasks require accurate end-effector
+terms for a model-based whole-body controller [11], [12].
+tracking, compliant interaction, and wrench regulation while
+These approaches improve reuse and data efficiency, but the
+respecting torque limits and contact feasibility, which are more
+coordination is often mediated through joint- or task-level
+naturally expressed through explicit whole-body objectives and
+interfaces (e.g., tracking footholds or residual terms). This
+constraints. For such end-to-end policies, the joint-space action
+becomes a bottleneck when manipulation demands coordinated
+base motion adjustments, such as reaching upward while
+Manuscript received: March 15, 2026; Revised: June 18, 2026; Accepted:
+September 2, 2026. maintaining dynamic feasibility. In addition, these interfaces
+This paper was recommended for publication by Editor Olivier Stasse upon
+are often tied to task-specific policy designs, which limits
+evaluation of the Associate Editor and Reviewers’ comments. This work
+compatibility with off-the-shelf locomotion policies.
+was supported in part by the National Natural Science Foundation of China
+under Grant 62425309 and in part by the Fundamental and Interdisciplinary
+These limitations point to a missing dynamics-level interface
+Disciplines Breakthrough Plan of the Ministry of Education of China under
+Grant JYB2025XDXM109. (Corresponding author: Jiahu Qin). between learned locomotion policies and model-based whole-
+1Chengzhen Yan, Qingchen Liu, Jiahu Qin, and Yiming Jiang are with body optimization: locomotion policies typically output joint-
+the Department of Automation, University of Science and Technology of
+space commands, whereas model-based whole-body control
+China, Hefei 230027, China (e-mail: yanchengzhen@ustc.edu.cn;
+qingchen_liu@ustc.edu.cn; jhqin@ustc.edu.cn; is formulated over dynamics-level variables such as gener-
+jiangyiming@mail.ustc.edu.cn).
+alized accelerations, contact wrenches, and joint torques. To
+2Yang Shi is with the Department of Mechanical Engineering, University
+address this, we introduce Policy Action Dynamics Projection
+of Victoria, Victoria, BC V8W 3P6, Canada (e-mail: yshi@uvic.ca).
+Digital Object Identifier (DOI): see top of this page. (PADP), a constrained projection that maps generic joint-space
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 2 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+2 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED SEPTEMBER, 2026
+policy outputs to contact-consistent whole-body variables by TABLE I
+enforcing rigid-body dynamics and contact conditions. Related COMPARISON WITH OTHER LOCO-MANIPULATION METHODS
+locomotion works have explored constrained dynamics inter-
+Controller ID MPC Unified RoboDuet MLM PADP
+pretations of learned policy actions [13], [14], while Acc-
+Capability [16] Policy [7] [9] [4] [Ours]
+CBF-QP [15] uses an acceleration-level CBF-QP to filter End-effector Position (cid:88) (cid:88) (cid:88) (cid:88) (cid:88)
+RL commands for runtime safety without policy retraining. End-effector Orientation (cid:88) × (cid:88) (cid:88) (cid:88)
+However, these methods focus on locomotion-oriented adap- End-effector Force (cid:88) (cid:88) × × (cid:88)
+tation or safety filtering and are not designed to provide
+Compliance Behavior (cid:88) (cid:88) × × (cid:88)
+a dynamics-level interface for unified loco-manipulation. In
+Uneven-Terrain Locomotion limited (cid:88) (cid:88) (cid:88) (cid:88)
+this work, we leverage PADP as a dynamics-level control
+interface in a unified loco-manipulation framework, which q¨ ∈ Rn v to denote generalized accelerations. The full-body
+equation of motion with external contact wrenches is given
+reuses a generic pretrained locomotion policy as a locomotion
+by:
+prior and integrates model-based manipulation in a subsequent
+unified whole-body QP. This enables coordinated whole-body M(q)q¨ + h(q,q˙) = S(cid:62)τ + J (q)(cid:62)F , (1)
+c c
+loco-manipulation and extends locomotion capability beyond where M(q) ∈ Rn v ×n v is the generalized inertia matrix,
+the policy’s original command space without retraining. The h(q,q˙) collects Coriolis, centrifugal, and gravity terms, and
+comparison with existing loco-manipulation methods is sum- τ ∈ Rn j is the vector of actuated joint torques. The selection
+marized in Table I. matrix is S = [0 I ] ∈ Rn j ×n v, which selects the
+n ×6 n
+j j
+The contributions of this work are summarized as follows: actuated joint subspace and leaves the floating base unactu-
+We develop a PADP-based loco-manipulation frame- ated. The stacked contact Jacobian J (q) ∈ Rn c ×n v maps
+• c
+work that reuses a generic pretrained locomotion policy generalized velocities to Cartesian or spatial contact velocities.
+and integrates position, force, and hybrid force-motion The contact wrench is F = [f(cid:62),...,f(cid:62),w(cid:62) ](cid:62) ∈ Rn c with
+c 1 n m
+(cid:96)
+objectives in a unified whole-body QP built on the n = 3n +6, where f ∈ R3 denotes the support contact force
+c (cid:96) i
+projected locomotion prior. Policy Action Dynamics acting on the robot at the i-th foot, and w ∈ R6 denotes the
+m
+Projection (PADP) serves as a dynamics-level inter- interaction wrench applied to the robot at the end-effector by
+face that maps joint-space policy actions into contact- the environment or manipulated object.
+consistent whole-body variables. This enables seamless
+coupling between learning-based locomotion and model-
+B. Problem Formulation: Reactive Whole-Body Optimization
+based whole-body optimization, supports coordinated
+At each control step, we solve a reactive whole-body opti-
+loco-manipulation beyond the original policy command
+mization over the dynamics variables x := (q¨,F ,τ) subject
+space, and requires no policy retraining. c
+to the dynamics-consistency constraints in (1) and physical-
+We validate the proposed approach in simulation and
+•
+feasibility constraints (see Section III). We use g(x,q,q˙) = 0
+hardware experiments on quadruped manipulators with
+to denote the equality constraints that enforce dynamics con-
+point-foot and wheeled-foot platforms, demonstrating
+sistency, including the equation of motion and contact-related
+stable loco-manipulation across contact-rich interaction,
+consistency conditions, and use x ∈ X(q,q˙) to denote the
+task-oriented operation, compliant human interaction, and
+corresponding physical feasibility set.
+uneven-terrain scenarios, together with improved agility
+The resulting reactive whole-body optimization is:
+and precision over conventional baselines.
+min (cid:96)(x) (2)
+x
+II. SYSTEM MODELING AND PROBLEM FORMULATION s.t. g(x,q,q˙) = 0, (3)
+In this section, we formulate loco-manipulation as a reac- x ∈ X(q,q˙), (4)
+tive whole-body optimization problem. We first introduce the where (cid:96)(x) captures loco-manipulation objectives and regular-
+full-body equations of motion and define the dynamics-level ization (see Section III-B).
+decision variables x = (q¨,F c ,τ). These variables provide a This formulation provides a common dynamics-level rep-
+common representation for the PADP locomotion prior and the resentation for imposing tasks and physical constraints in
+model-based manipulation objectives introduced later. reactive loco-manipulation. Reinforcement learning (RL) lo-
+comotion policies typically output joint-space actions rather
+than the dynamics-level variables x = (q¨,F ,τ) as in model-
+A. Full-body Dynamics for Loco-Manipulation c
+based whole-body optimization. This motivates a dynamics-
+We consider a floating-base manipulator with n legs and
+(cid:96) level interface that maps policy actions to feasible whole-body
+an arm, applicable to point-foot and wheeled-foot robots.
+variables, as introduced next in Section III-A.
+The generalized coordinates are q = [p(cid:62), q(cid:62), q(cid:62) ](cid:62),
+b b j
+where p ∈ R3 is the base position, q ∈ S3 is the base
+b b
+orientation represented by a unit quaternion, and q ∈ Rn j
+III. PADP LOCO-MANIPULATION FRAMEWORK
+j
+collects leg and manipulator joints. The generalized velocity Fig. 2 provides an overview of the proposed framework.
+is q˙ = [v(cid:62), ω(cid:62), q˙(cid:62) ](cid:62) ∈ Rn v with n = 6 + n , where At each control step, a pretrained locomotion policy generates
+b b j v j
+v ,ω ∈ R3 are the base linear and angular velocities. We use joint-space actions executed as a PD torque primitive, which is
+b b
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 3 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+YAN et al.: FROM POLICY ACTIONS TO WHOLE-BODY DYNAMICS 3
+Fig. 2. Overview of the proposed PADP loco-manipulation framework. A user command specifies the end-effector task for manipulation, while a pretrained
+locomotion policy is driven by a command override generated from the optimized base motion to promote coordinated whole-body behavior. The locomotion
+policy maps the observation o to a joint-space action a, which is projected by PADP into a contact-consistent locomotion prior xPADP. The unified whole-
+body QP combines the PADP prior with locomotion and manipulation objectives under rigid-body dynamics and contact constraints, producing joint torque
+commands τ. Proprioceptive state estimation provides (q,q˙) and the contact mode to the optimizer, and the observation input to the policy.
+wheel joints are specified through q˙des while the associated
+loco
+K entries are set to zero.
+p,loco
+The policy action is then converted into a torque primitive
+using PD laws in joint-space:
+(cid:0) (cid:1) (cid:0) (cid:1)
+τπ = K qdes − S q + K q˙des − S q˙ .
+loco p,loco loco loco j d,loco loco loco j
+(6)
+A selection matrix S ∈ Rn j,loco ×n j is used to extract
+loco
+locomotion-related joints (i.e., leg joints) from the full actuated
+joints, leaving the torques for the manipulator unspecified. This
+torque primitive captures the effective closed-loop behavior
+implied by the learned action.
+Fig. 3. Illustration of Policy Action Dynamics Projection (PADP) interface. 2) Dynamics Projection to Whole-Body Variables: The
+A learning-based locomotion policy is executed in joint space as a PD torque torque primitive τπ is defined in joint space, while the
+primitive τπ (left). PADP then projects this joint-space action into contact- loco
+loco whole-body optimization in Section II-B is posed over the
+consistent whole-body variables x = (q¨,F ,τ) (right) by enforcing rigid-
+c
+body dynamics in (1) and contact kinematics in (7), producing a dynamics- dynamics-level variables x = (q¨,F ,τ). PADP bridges this
+c
+level locomotion prior for the subsequent whole-body optimization.
+gap by solving a constrained dynamics projection, where the
+projected by PADP into a contact-consistent locomotion prior contact consistency is enforced through contact constraints.
+xPADP. The PADP prior is then combined with model-based lo- For each active support contact c ∈ C , the contact-consistent
+i s
+comotion and manipulation objectives under shared dynamics acceleration of the contact point r satisfies:
+c
+i
+and contact constraints to generate whole-body commands for ¨r = J (q)q¨ + J ˙ (q,q˙)q˙ = a , ∀c ∈ C , (7)
+c c c c i s
+i i i i
+loco-manipulation. This design preserves the robustness of the
+where a = 0 for point-foot stance contacts and a =
+c c
+learned mobility while enabling coordinated whole-body loco- i i
+a (q,q˙) for wheeled-foot rolling contacts given in [17].
+roll,c
+manipulation, including base height and posture adjustments, i
+without policy retraining. The constrained dynamics projection is then written as:
+xPADP := arg min (cid:13) (cid:13)S τ − τπ (cid:13) (cid:13) 2 (8)
+loco loco
+q¨,F ,τ
+c
+A. Policy Action Dynamics Projection (PADP) Interface s.t. (1), (7), (F ,τ) ∈ U. (9)
+c
+In practice, we use a small regularization term to improve
+Locomotion policies are typically executed via joint-space
+numerical conditioning. Here, “projection” refers to the con-
+references and low-level PD control. PADP builds a dynamics-
+strained optimization that selects a dynamics- and contact-
+level interface for such policies by projecting their joint-space
+consistent realization of the policy-implied torque primitive,
+actions into contact-consistent whole-body variables, as shown
+rather than dimensionality reduction.
+in Fig. 3.
+1) Locomotion Policy Action: Let π denote a pretrained
+θ The projected solution xPADP provides one contact-
+locomotion policy that maps the current observation o to a
+t consistent dynamics-level realization of the policy-implied
+joint-space action:
+torque primitive, which is used as a locomotion prior for
+(cid:0) (cid:1)
+al t oco = π θ (o t ) := qd lo e c s o , q˙d lo e c s o , K p,loco , K d,loco , (5) the subsequent whole-body optimization. Manipulation often
+where qdes ,q˙des ∈ Rn j,loco are desired position and velocity requires additional whole-body adjustments, especially in base
+loco loco
+references for locomotion-related joints. The diagonal PD gain height and posture. These requirements are incorporated to-
+matrices K ,K ∈ Rn j,loco ×n j,loco follow the policy gether with the PADP prior in the unified whole-body opti-
+p,loco d,loco
+execution setup used during training. For wheeled-foot robots, mization introduced next.
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 4 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+4 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED SEPTEMBER, 2026
+B. Unified Whole-Body QP for Loco-Manipulation couples the arm motion with the floating-base motion. This
+Given the PADP locomotion prior xPADP, we solve the coupling allows the optimizer to coordinate manipulation with
+contact-consistent whole-body dynamics, rather than treating
+unified whole-body QP over x = (q¨,F ,τ), where the
+c
+the arm as an isolated subsystem.
+PADP projection acts as a locomotion reference and model-
+In practice, the weighting matrix W can be tuned to realize
+based objectives are introduced for manipulation and whole- ee
+different tracking behaviors (e.g., position-only tracking by
+body coordination. This design preserves the robustness of the
+setting orientation-related weights to zero).
+pretrained locomotion policy while allowing the optimizer to
+generate base and leg adjustments required by manipulation. Arm Posture Regularization and Damping: We regularize
+1) Locomotion Objectives the arm with a nominal posture objective to suppress unnec-
+Locomotion in the unified QP is regulated by softly tracking essary motion and reduce the risk of kinematic singularities
+the PADP prior, together with light base-motion regularization and self-collision during end-effector tracking. The desired arm
+and support-force shaping terms. This keeps the locomotion acceleration is generated by joint-space PD feedback toward
+behavior anchored to the pretrained policy, while still allowing the nominal arm posture:
+the optimizer to adapt the whole-body motion for manipu- q¨des = K (qnom − q ) − K q˙ ,
+arm p,arm arm arm d,arm arm
+lation. The optimized base acceleration is integrated into a
+where K and K are diagonal posture and damping
+p,arm d,arm
+velocity command for the locomotion policy. In this manner,
+gain matrices. The arm posture regularization is written as
+the policy command is generated adaptively by the QP rather (cid:13) (cid:13)2
+(cid:96) (x) = (cid:13)S q¨ − q¨des (cid:13) . (14)
+than being specified manually. arm arm arm W
+arm
+Here S selects the arm joint components from q¨. Thus,
+PADP Locomotion Prior: The projected locomotion- arm
+this term tracks an acceleration reference that contains the
+related dynamics xPADP = (q¨PADP,FPADP,τPADP) is used as
+c posture error and velocity damping, rather than merely limiting
+a soft reference for the locomotion subspace.
+the arm acceleration. It discourages excessive arm motion and
+We use the following locomotion objectives:
+encourages the optimizer to use base and leg motion to assist
+(cid:13) (cid:13)2
+(cid:96) (x) = (cid:13)P x − P xPADP (cid:13) , (10)
+prior loco loco end-effector tracking. As a result, the base can adapt its posture
+W
+prior
+where the selection matrix P extracts the locomotion- and translate to “follow” the end-effector reference, enabling
+loco
+related terms of x and excludes manipulation-related terms. longer-range tracking beyond the arm workspace.
+Base Motion Regularization: We specify a nominal base
+End-effector Contact Constraint: For end-effector in-
+posture (pdes,qdes) for base-motion regularization, which en-
+b b teraction tasks, we constrain only the motion component
+codes a level attitude and a nominal body height. A desired
+associated with the desired interaction wrench [18]. Let the
+base acceleration q¨d b es ∈ R6 is generated with a PD law on the desired wrench be w m ref = [f m ref(cid:62), µr m ef(cid:62) ](cid:62), and let ˆ f m and
+base pose error, with damping on the base twist.
+µˆ denote its normalized force and torque directions. Writing
+m
+The task is expressed as a soft term in the QP:
+the end-effector Jacobian as J = [J(cid:62), J(cid:62) ](cid:62), we impose a
+(cid:13) (cid:13)2 m f µ
+(cid:96) (x) = (cid:13)P q¨ − q¨des (cid:13) , (11) directional motion constraint
+base b b W base (cid:16) (cid:17) (cid:16) (cid:17)
+where P selects the floating-base components in q¨. This term ˆ f(cid:62) J q¨ + J ˙ q˙ = 0, µˆ (cid:62) J q¨ + J ˙ q˙ = 0, (15)
+b m f f m µ µ
+improves stability and allows additional locomotion objectives
+along the active reference directions, while suppressing the
+such as body height and attitude control for coordinated whole-
+orthogonal wrench components:
+body motion. (cid:16) (cid:17) (cid:16) (cid:17)
+I − ˆ f ˆ f(cid:62) f = 0, I − µˆ µˆ (cid:62) µ = 0. (16)
+Contact Force Regularization: We also penalize excessive m m m m m m
+If a reference force or torque component is set to zero
+forces for the leg contacts, which is formulated as
+(cid:13) (cid:13)2 (including free-space motion), no directional motion constraint
+(cid:96) (x) = (cid:13)P F (cid:13) , (12)
+force (cid:96) c
+W force is imposed for that component, and the corresponding end-
+where P selects the leg-contact components in F .
+(cid:96) c effector wrench component is constrained to zero. This ap-
+2) Manipulation Objectives
+proach enables hybrid force-motion control without imposing
+We formulate manipulation as a set of explicit objectives
+a full rigid-contact condition at the end-effector.
+defined on the unified whole-body variables, so that end-
+End-effector Wrench Tracking: For end-effector interac-
+effector tracking and contact interaction are optimized jointly
+tion tasks, the desired end-effector wrench wref that acts on
+with base and leg motions. The objectives include end-effector m
+the end-effector is tracked by the following objective:
+motion tracking, arm posture regularization for robustness and
+(cid:13) (cid:13)2
+whole-body coordination, and optional wrench tracking during (cid:96) wrench (x) = (cid:13)P m F c − w m ref (cid:13) W , (17)
+wrench
+end-effector interaction. where P selects the end-effector wrench components from
+m
+End-effector Motion Tracking: Let J (q) ∈ R6×n v F c . This term is disabled during free-space motion.
+m
+denote the end-effector spatial Jacobian. We define a desired 3) Unified Whole-Body QP
+spatial acceleration ades ∈ R6 using PD feedback on pose and
+m A possible alternative is to retain the raw policy torque-
+twist errors:
+tracking objective directly in the final whole-body QP. In such
+(cid:96) ee (x) = (cid:13) (cid:13)J m (q)q¨ + J ˙ m (q,q˙)q˙ − ad m es (cid:13) (cid:13) 2 W . (13) a single-stage formulation, the generalized accelerations and
+ee
+Although the objective is specified at the end-effector, it contact wrenches are selected jointly with the manipulation
+is enforced over the generalized acceleration q¨ and therefore objectives. In contrast, the proposed two-stage formulation first
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 5 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+YAN et al.: FROM POLICY ACTIONS TO WHOLE-BODY DYNAMICS 5
+obtains an explicit contact-consistent dynamics-level realiza-
+tion xPADP of the policy-implied torque primitive and then
+uses it as a soft locomotion prior for task coordination. This
+formulation provides a modular and interpretable separation
+between locomotion-prior construction and whole-body task
+Fig. 4. Snapshots of the quadruped reaching end-effector targets in different
+coordination.
+regions of the workspace.
+With this prior, we stack the locomotion and manipulation
+objectives into the following weighted QP:
+(cid:88)
+min α (cid:96) (x) (18)
+k k
+x
+k∈K
+s.t. (1), (7), (15), (16), (F ,τ) ∈ U, (19)
+c
+where K collects all task terms and α are scalar weights
+k
+used to adjust task priorities. Each task cost is written as
+(cid:96) (x) = (cid:107)e (x)(cid:107)2 , where W is a diagonal weighting
+k k W k
+k
+matrix. In our experiments, all W matrices are fixed across Fig. 5. Workspace reachability with the corresponding sampled workspace
+k
+radius r . For each radius, end-effector targets are randomly sampled within
+ws
+tasks, and all scalar weights are fixed except α , which is
+ee a spherical region centered at the base frame with constrained height, and the
+increased from 1.0 to 2.0 only for uneven-terrain end-effector success rate is computed over all trials for each method.
+following. The wrench-tracking term is omitted from K when
+PD terms are clipped in the implementation to avoid overly
+no contact-force task is active. The main tuning parameter
+aggressive acceleration commands.
+is α , which balances the projected locomotion prior and
+prior
+whole-body adaptation. This two-stage design avoids directly
+V. RESULTS
+tuning the raw policy torque cost against each manipulation
+objective, and the other weights do not require fine-tuning in We evaluate our method both in simulation and in hardware
+our experiments. The feasible set U includes a linearized fric- experiments on point-foot and wheeled-foot platforms. Both
+tion pyramid, bounds on contact wrenches and joint torques, platforms are equipped with a 6-DOF Unitree Z1 manipulator
+and a zero-wrench constraint for inactive contacts. (4.5 kg).
+The solution yields contact-consistent whole-body acceler-
+ations, contact wrenches, and joint torques that coordinate
+A. Simulation Experiments
+locomotion and manipulation. The optimized joint torques are
+Simulation experiments are conducted on a Unitree Go2
+sent to the robot motors at each execution step.
+quadruped (point-foot, 15 kg) in MuJoCo, with a simulation
+time step of 2 ms, on an Intel i9-11900K CPU. Unless
+IV. IMPLEMENTATION DETAILS
+otherwise stated, the robot traverses the simulated uneven
+State Estimation: The proposed PADP controller runs terrain shown in Fig. 7. For the continuous tracking task, both
+using only proprioceptive sensors. The active contact set C is flat and uneven terrain conditions are evaluated.
+s
+obtained from foot force sensors when available, or otherwise 1) Baselines
+estimated using the momentum-based contact observer in [19]. We compare against the following baselines: RL + Arm-
+State estimation follows a Kalman-filter-based pipeline similar QP: The legs are controlled by the pretrained locomotion
+to [20]. For point-foot stance contacts, we assume zero contact- policy, while the arm is controlled as an isolated subsystem
+point velocity, while for wheeled-foot contacts, the expected using the same manipulation QP objectives. PADP + Arm-
+nonzero contact-point velocity is specified by the rolling kine- QP: PADP is used to compute a contact-consistent locomotion
+matics. solution, which is then executed directly, while the arm is
+Locomotion Policy Training: The locomotion policy is still controlled by the isolated Arm-QP without unified loco-
+trained in Isaac Gym following [21], with minor modifications manipulation coupling. PADP Loco-Manipulation Controller
+for the wheeled-foot platform, and its actions are directly exe- (Ours): The proposed unified whole-body QP incorporates the
+cuted by a standard joint-space PD controller during training. PADP locomotion prior and optimizes manipulation objectives
+The policy is trained independently from PADP and the unified
+TABLE II
+whole-body QP, kept fixed after training, and only projected
+END-EFFECTOR TRACKING PERFORMANCE (RMSE ± STD).
+by PADP at runtime as a dynamics-level locomotion prior.
+Metric Ours Whole-Body MPC Whole-Body RL
+Runtime and Software Setup: At runtime, the locomo-
+tion policy is updated asynchronously at 50 Hz, and the Flat terrain
+Velocity (m/s) 0.067±0.060 0.037±0.039 0.069±0.052
+most recent policy output is held constant between updates.
+Position (m) 0.008±0.008 0.006±0.006 0.019±0.009
+State estimation, PADP, and the unified whole-body QP run
+Orientation (rad) 0.082±0.054 0.097±0.062 0.158±0.129
+at 500 Hz. Robot dynamics and kinematics are computed
+Uneven terrain
+using the Pinocchio C++ library [22], and the QP is solved
+Velocity (m/s) 0.122±0.184 0.278±0.578 0.259±0.368
+with qpOASES [23]. Policy inference is implemented using a Position (m) 0.011±0.013 0.048±0.082 0.034±0.048
+Orientation (rad) 0.162±0.280 0.443±0.759 0.302±0.475
+LibTorch JIT model. In addition, large errors in the task-space
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 6 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+6 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED SEPTEMBER, 2026
+Fig. 6. End-effector tracking during continuous loco-manipulation on sim- Fig. 8. Disturbance response during end-effector velocity tracking at 0.3 m/s
+ulated uneven terrain. Top: the end-effector z position closely follows the along x. A lateral force is applied for 0.4 s to the base (70 N) or the end-
+sinusoidal reference in the xz plane, while the base height is adjusted effector (50 N). Top: lateral positions of the base and end-effector. Bottom:
+adaptively by the controller to coordinate loco-manipulation. Bottom: the base lateral base/end-effector velocities and the end-effector velocity along the
+forward velocity fluctuates during locomotion, while the end-effector forward tracking direction.
+velocity remains comparatively smooth.
+TABLE III
+AVERAGE CONTROLLER COMPUTATION TIME (MEAN ± STD, IN MS)
+Policy Model Eval. Update
+Method
+Inference (ms) Optimization (ms) Rate
+Ours 0.41±0.08 0.85±0.25 500 Hz
+Whole-Body MPC – 18.52±3.81 80 Hz
+Whole-Body RL 0.63±0.15 – 50 Hz
+arm-only manipulation cannot drive coordinated whole-body
+reconfiguration toward targets outside the local arm workspace.
+Fig. 7. Simulation snapshots of end-effector tracking on the Unitree Go2 Whole-Body RL remains competitive for nearby targets but
+in MuJoCo. The robot traverses the simulated uneven terrain while tracking
+drops as whole-body repositioning becomes more important,
+a sinusoidal end-effector trajectory in the xz plane. Note that the reused
+while Whole-Body MPC often loses balance on the simulated
+locomotion policy alone does not support base-height adjustment. Instead,
+the base height is coordinated by the proposed unified loco-manipulation uneven terrain when large body motion is required.
+controller.
+3) End-effector Tracking Accuracy
+simultaneously under the same full-body dynamics. Whole-
+The tracking performance for the continuous end-effector
+Body MPC: A whole-body inverse-dynamics MPC controller
+tracking task is summarized in Table II. The robot starts from
+following [16]. Whole-Body RL: An end-to-end RL loco-
+its nominal configuration and tracks a desired end-effector
+manipulation controller following [10].
+velocity of 0.3 m/s along the x direction. The decoupled
+2) Workspace Reachability
+baselines, RL + Arm-QP and PADP + Arm-QP, are excluded
+We randomly sample 100 desired end-effector positions pdes
+ee because they cannot sustain this long-range tracking task
+within a ball of radius r m centered at the base-frame
+ws without coordinated whole-body motion. On flat terrain, our
+origin, with height constrained to z ∈ [0.3, 1.1] m. A trial
+method achieves comparable translational tracking accuracy
+is considered successful if the end-effector reaches the target
+to Whole-Body MPC and the lowest orientation error. On the
+within 10 s with a final position error (cid:107)p −pdes(cid:107) < 0.05 m.
+ee ee 2 simulated uneven terrain, our method degrades much less than
+Reachability is measured as the success rate over all trials.
+the baselines, while Whole-Body MPC often loses balance
+Fig. 5 shows that the proposed controller achieves the
+after only a few steps and Whole-Body RL suffers from larger
+highest workspace reachability over all tested radii. Since r
+ws
+tracking errors. These results indicate that PADP preserves the
+is measured from the robot base frame, a smaller radius does
+stability of the reused locomotion policy, while the unified
+not necessarily indicate an easier target. Near-body targets
+whole-body QP explicitly regulates end-effector motion and
+may require the base to move away while the arm folds
+whole-body dynamics at high frequency.
+back to create sufficient manipulation space, which explains
+4) Whole-Body Coordination
+the lower success rate at r = 0.3, where many failed
+ws
+samples are located in the inner workspace close to the Another example of continuous end-effector tracking on the
+robot body. Overall, the proposed controller maintains high simulated uneven terrain is shown in Fig. 7, with the corre-
+reachability across different target regions, indicating that the sponding tracking data plotted in Fig. 6. The end-effector z
+robot expands its manipulation workspace through coordinated position closely follows the sinusoidal reference throughout the
+loco-manipulation rather than local arm motion alone, as illus- motion, while the base height is adjusted adaptively by the con-
+trated in Fig. 4. The decoupled baselines, RL + Arm-QP and troller to support the tracking task, indicating that the motion
+PADP + Arm-QP, degrade rapidly as r increases, because is achieved through coordinated whole-body assistance rather
+ws
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 7 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+YAN et al.: FROM POLICY ACTIONS TO WHOLE-BODY DYNAMICS 7
+Fig. 9. Hardware demonstrations of contact-rich loco-manipulation. (a)(b)
+Elastic-band pulling with whole-body posture adaptation. (c) Wall wiping with
+end-effector contact. (d) Contact writing. (e) Close-up of the end-effector trace
+during contact writing.
+than arm motion alone. Meanwhile, although the base forward
+velocity exhibits noticeable fluctuations during locomotion, the
+end-effector forward velocity remains comparatively smooth.
+Fig. 10. Flat-ground hardware demonstrations of task-oriented loco-
+This result suggests that the proposed controller compensates
+manipulation and compliant interaction. (a)–(c) Object grasping and dropping.
+locomotion-induced body motion through coordinated whole- (d)–(f) Door opening. (g)–(i) Compliant response under human interaction,
+body control, thereby preserving stable end-effector tracking where the red arrow indicates the external perturbation direction.
+on uneven ground. 1) Hybrid Force-Motion Manipulation
+We first evaluate the capability of end-effector force con-
+5) Robustness under Disturbance
+trol, including elastic-band pulling, wall wiping, and contact
+Fig. 8 shows the disturbance response while tracking a
+writing. These tasks require either direct end-effector force
+constant end-effector velocity of 0.3 m/s along the x direction.
+regulation or hybrid force-motion control while maintaining
+When a lateral force is applied to the base, the base shows
+contact. In Fig. 9, the robot tracks an increasing backward
+a noticeable displacement in the y direction, while the end-
+pulling force by lowering the body, extending the arm, and
+effector y position remains close to its reference, indicating
+repositioning the base. The visible oscillations mainly come
+that the controller absorbs the disturbance through whole-body
+from small fluctuations of the torque-based contact estimator
+motion without significantly degrading the end-effector task.
+under the unmodeled elastic-band force, while the robot re-
+When a lateral force is applied directly to the end-effector,
+mains stable and completes the pulling task. During the wall-
+a larger deviation appears in the end-effector y position, but
+wiping and contact-writing tasks shown in Fig. 9, the end-
+the error quickly decreases after the disturbance is removed.
+effector maintains stable wall contact while moving tangen-
+Meanwhile, the end-effector velocity along the commanded x
+tially along the surface. These tasks require normal-direction
+direction remains close to the desired value except for a short
+force regulation together with motion tracking along the wall.
+transient. These results demonstrate robust loco-manipulation
+The robot successfully sustains stable contact during wiping
+performance under external disturbances through coordinated
+and traces an accurate trajectory during contact writing.
+whole-body control.
+2) Representative Loco-Manipulation Tasks
+6) Computation Time
+Two task-oriented examples are shown in Fig. 10(a)–(f),
+Table III reports the measured controller computation time.
+including object grasping and dropping, and door opening. In
+The reported update rate refers to the high-level evaluation rate
+both tasks, the operator specifies only the desired end-effector
+used in simulation execution. For our method, policy inference
+motion and orientation with a remote controller, while the
+runs asynchronously, and the model-optimization time includes
+body and leg motions are generated automatically to support
+both PADP and the unified whole-body QP. The total model-
+manipulation. In the object grasping task, the robot adjusts its
+optimization time is 0.85±0.25 ms, which is below the 2 ms
+body posture and base position to support grasping, transport,
+period required by the 500 Hz whole-body control loop. In
+and release. During door opening, the end-effector is guided
+contrast, Whole-Body MPC requires 18.52 ms per optimization
+to grab and rotate the handle, and the robot moves continu-
+on the same CPU, exceeding the 12.5 ms period of an 80 Hz
+ously with the commanded end-effector motion throughout the
+real-time loop. Thus, its 80 Hz rate in Table III denotes a
+interaction.
+simulated-time evaluation rate.
+3) Uneven-terrain Hardware Validation
+To further clarify the uneven-terrain capability of the pro-
+posed framework, we conduct two additional hardware ex-
+B. Hardware Experiments
+periments with the PADP-based loco-manipulation controller
+The hardware experiments are conducted on a DEEP active, as shown in Fig. 11. The robot grasps a suspended
+Robotics LYNX M20 quadruped (wheeled-foot, 33 kg) using object while traversing uneven grass terrain, and performs
+an onboard Intel NUC with an Intel Core i7-1360P CPU. end-effector tracking while ascending and descending a step.
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.
+
+=== PAGE 8 ===
+This article has been accepted for publication in IEEE Robotics and Automation Letters. This is the author's version which has not been fully edited and
+content may change prior to final publication. Citation information: DOI 10.1109/LRA.2026.3734869
+8 IEEE ROBOTICS AND AUTOMATION LETTERS. PREPRINT VERSION. ACCEPTED SEPTEMBER, 2026
+[5] T. Portela, A. Cramariuc, M. Mittal, and M. Hutter, “Whole-body end-
+effector pose tracking,” in 2025 IEEE International Conference on
+Robotics and Automation (ICRA), pp. 11205–11211, IEEE, 2025.
+[6] D. Hou, C. Zhu, Z. Zhang, Z. Li, C. Guo, and Y. Liu, “Efficient learning
+of a unified policy for whole-body manipulation and locomotion skills,”
+in 2025 IEEE/RSJ International Conference on Intelligent Robots and
+Systems (IROS), pp. 5455–5461, IEEE, 2025.
+[7] P. Zhi, P. Li, J. Yin, B. Jia, and S. Huang, “Learning a unified policy for
+position and force control in legged loco-manipulation,” in 9th Annual
+Conference on Robot Learning, 2025.
+Fig. 11. Uneven-terrain hardware validation with the PADP-based loco-
+[8] B. Xu, H. Weng, Q. Lu, Y. Gao, and H. Xu, “FACET: Force-adaptive
+manipulation controller active. (a)–(c) Object grasping while traversing uneven
+control via impedance reference tracking for legged robots,” in 9th
+grass terrain. (d)–(f) End-effector tracking during step traversal under non-flat
+Annual Conference on Robot Learning, 2025.
+contact conditions.
+[9] G. Pan, Q. Ben, Z. Yuan, G. Jiang, Y. Ji, S. Li, J. Pang, H. Liu, and
+These experiments provide hardware evidence of PADP-based H. Xu, “Roboduet: Learning a cooperative policy for whole-body legged
+loco-manipulation,” IEEE Robotics and Automation Letters, 2025.
+loco-manipulation on moderately uneven terrain. However, the
+[10] Z. Wang, Y. Jia, L. Shi, H. Wang, H. Zhao, X. Li, J. Zhou, J. Ma, and
+current validation does not cover highly irregular, loose, or
+G. Zhou, “Arm-constrained curriculum learning for loco-manipulation of
+deformable terrain. Since PADP relies on estimated contact a wheel-legged robot,” in 2024 IEEE/RSJ International Conference on
+Intelligent Robots and Systems (IROS), pp. 10770–10776, 2024.
+states and nominal wheel-ground contact kinematics, large
+[11] J. Cheng, D. Kang, G. Fadini, G. Shi, and S. Coros, “Rambo: Rl-
+contact-point errors and rapid contact changes may degrade
+augmented model-based whole-body control for loco-manipulation,”
+controller performance under such conditions. IEEE Robotics and Automation Letters, 2025.
+[12] Y. Chen and Q. Nguyen, “Learning agile locomotion and adaptive be-
+4) Compliant Human Interaction
+haviors via rl-augmented mpc,” in 2024 IEEE International Conference
+Fig. 10(g)–(i) illustrates compliant human interaction. With on Robotics and Automation (ICRA), pp. 11436–11442, IEEE, 2024.
+[13] C. Yan, Y. Jiang, Q. Liu, J. Qin, Q. Ma, and Y. Wang, “Constraint-aware
+reduced end-effector tracking gains and bounded tracking
+adaptation: Bridging model-based control with reinforcement learning
+errors, the end-effector can be manually pulled and reposi- for quadruped versatility,” IEEE/ASME Transactions on Mechatronics,
+tioned without generating strong resistance. When an external 2025.
+[14] H. Wang, R. Zhou, L. Ding, T. Liu, Z. Zhang, P. Xu, H. Gao, and
+perturbation is applied, the controller produces coordinated
+Z. Deng, “Whole-body constrained learning for legged locomotion via
+body and arm adaptation, including body lowering and arm hierarchical optimization,” IEEE Robotics and Automation Letters, 2025.
+extension, while maintaining stable support. [15] B. Muraccioli, A. Cariou, P.-A. Leziart, M. Celerier, A. Demont, G. Ven-
+ture, and M. Benallegue, “Safe execution of RL policies via acceleration-
+based CBF-QP constraint enforcement for real-world robotic deploy-
+ments,” in Proc. IEEE/RSJ International Conference on Intelligent
+VI. CONCLUSION
+Robots and Systems (IROS), 2026. Accepted for publication.
+[16] L. Molnar, J. Cheng, G. Fadini, D. Kang, F. Zargarbashi, and S. Coros,
+This work presented a unified loco-manipulation framework
+“Whole-body inverse dynamics mpc for legged loco-manipulation,”
+that bridges generic learning-based locomotion and model-
+IEEE Robotics and Automation Letters, 2025.
+based whole-body control through Policy Action Dynamics [17] M. Bjelonic, C. D. Bellicoso, Y. de Viragh, D. Sako, F. D. Tresoldi,
+F. Jenelten, and M. Hutter, “Keep rollin’—whole-body motion control
+Projection (PADP). By projecting joint-space policy outputs
+and planning for wheeled quadrupedal robots,” IEEE Robotics and
+into contact-consistent whole-body variables and using them
+Automation Letters, vol. 4, no. 2, pp. 2116–2123, 2019.
+as a locomotion prior, the proposed method enables position, [18] C. Yan, J. Qin, Q. Liu, and Q. Ma, “Slip detection and recovery for
+quadruped robots via orthogonal decomposition,” IEEE Transactions on
+force, and hybrid force-motion manipulation without retrain-
+Industrial Electronics, vol. 72, no. 6, pp. 6166–6174, 2025.
+ing the locomotion policy. Simulation and hardware experi-
+[19] G. Bledt, P. M. Wensing, S. Ingersoll, and S. Kim, “Contact model
+ments on point-foot and wheeled-foot quadruped manipulators fusion for event-based locomotion in unstructured terrains,” in 2018
+IEEE International Conference on Robotics and Automation (ICRA),
+demonstrated stable and accurate loco-manipulation across
+pp. 4399–4406, IEEE, 2018.
+free-space tracking, contact-rich interaction, task-oriented op-
+[20] G. Bledt, M. J. Powell, B. Katz, J. Di Carlo, P. M. Wensing, and S. Kim,
+eration, compliant human interaction, and uneven-terrain sce- “Mit cheetah 3: Design and control of a robust, dynamic quadruped
+robot,” in 2018 IEEE/RSJ International Conference on Intelligent Robots
+narios. These results suggest a practical route for reusing
+and Systems (IROS), pp. 2245–2252, IEEE, 2018.
+existing joint-space locomotion policies in dynamic whole-
+[21] J. Long, Z. Wang, Q. Li, J. Gao, L. Cao, and J. Pang, “Hybrid internal
+body loco-manipulation. model:Learningagileleggedlocomotionwithsimulatedrobotresponse,”
+arXiv preprint arXiv:2312.11460, 2023.
+[22] J. Carpentier, G. Saurel, G. Buondonno, J. Mirabel, F. Lamiraux,
+O. Stasse, and N. Mansard, “The pinocchio c++ library – a fast and
+REFERENCES
+flexible implementation of rigid body dynamics algorithms and their
+analytical derivatives,” in IEEE International Symposium on System
+[1] J.-P. Sleiman, F. Farshidian, and M. Hutter, “Versatile multicontact
+Integrations (SII), 2019.
+planning and control for legged loco-manipulation,” Science Robotics,
+[23] H. J. Ferreau, C. Kirches, A. Potschka, H. G. Bock, and M. Diehl,
+vol. 8, no. 81, p. eadg5014, 2023.
+“qpoases: A parametric active-set algorithm for quadratic programming,”
+[2] G. B. Margolis, G. Yang, K. Paigwar, T. Chen, and P. Agrawal, “Rapid
+Mathematical Programming Computation, vol. 6, no. 4, pp. 327–363,
+locomotion via reinforcement learning,” The International Journal of
+2014.
+Robotics Research, vol. 43, no. 4, pp. 572–587, 2024.
+[3] J.-R. Chiu, J.-P. Sleiman, M. Mittal, F. Farshidian, and M. Hutter, “A
+collision-free mpc for whole-body dynamic locomotion and manipu-
+lation,” in 2022 international conference on robotics and automation
+(ICRA), pp. 4686–4693, IEEE, 2022.
+[4] X. Liu, B. Ma, C. Qi, Y. Ding, N. Xu, G. Zhang, P. Chen, K. Liu,
+Z. Jia, C. Guan, et al., “Mlm: Learning multi-task loco-manipulation
+whole-body control for quadruped robot with arm,” IEEE Robotics and
+Automation Letters, vol. 11, no. 1, pp. 81–88, 2025.
+Authorized licensed use limited to: Zhejiang University. Downloaded on September 21,2026 at 08:08:24 UTC from IEEE Xplore. Restrictions apply.
+© 2026 IEEE. All rights reserved, including rights for text and data mining and training of artificial intelligence and similar technologies. Personal use is permitted,
+but republication/redistribution requires IEEE permission. See https://www.ieee.org/publications/rights/index.html for more information.

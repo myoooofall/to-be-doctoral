@@ -3,6 +3,8 @@
 这里先明确focus：我们主要看水下机器人的learning-based导航和运动控制  
 不重点看水下建图/SLAM/三维重建 本文里如果出现state estimation/visual odometry 只把它当成训练标签生成或控制闭环需要的辅助模块  
 
+2026-09-23补充范围：由于后续任务转向“学习运动／空间估计 + 水下避障导航 + 间歇位置校正”，本文增加learned odometry与active localization相关工作；仍不展开完整SLAM综述。新增条目区分论文事实、我们的解释及尚未核实的内容。  
+
 水下机器人和地面/腿式机器人的不同点：  
 GPS不可用 视觉容易受浑浊/光照/水流影响 低层动力学里浮力/阻力/水流非常重要  
 所以水下learning方向大概分两条：  
@@ -73,14 +75,18 @@ task与系统分层 -> observation/action接口 -> 传感器可获得性 -> simu
 | 2024-03 | Path-Following Control of UUV Based on an Improved TD3 DRL | IEEE Transactions on Control Systems Technology 32(5) | **4-DoF given-path tracking**：仿真中同时跟踪x/y/z变化的真实3D螺旋；实物因水下RTK不可用，只分别验证水面二维路径和水下定深；混合真实replay重训，不是zero-shot。 |
 | 2024/2025 | Toward 6-DOF AUV Energy-Aware Position Control Based on DRL | IEEE/OES AUV 2024报告；arXiv 2025 | Swim4Real前期版本：TQC直接输出8推进器命令做6-DoF定点位姿调节并惩罚动作能耗；仅仿真。 |
 | 2024/2025 | Learning to Swim: RL for 6-DOF Control of Thruster-Driven AUVs | ICRA 2025 | 6-DoF目标位姿调节，PPO直接输出6个推进器；Isaac Lab大规模并行和domain randomization，zero-shot水池实物。 |
+| 2025-02 | DeepVL: Dynamics and Inertial Measurements-based Deep Velocity Learning for Underwater Odometry | ICRA 2025 | 本体／执行器信息学习速度与不确定性，融合EKF进行水下里程计；有真实数据和闭环验证，不是避障导航policy。 |
 | 2025 | Swim4Real: DRL-Based Energy-Efficient and Agile 6-DOF Control for Underwater Vehicles | IEEE Robotics and Automation Letters 10(7) | **6-DoF固定目标位姿调节，不是轨迹跟踪**；TQC直接输出MOLA的8个PWM，Stonefish仿真训练约15小时，直接下水槽做10组实验；以PWM拟合功率估计约39%节能。 |
 | 2025 | MarineGym: A High-Performance RL Platform for Underwater Robotics | IROS 2025 | GPU并行水动力仿真和控制benchmark平台，覆盖定点、轨迹和着陆；它是平台论文，不是一套完整导航policy。 |
+| 2025-09 | Active Perception for Underwater Vehicle Navigation based on Belief Space Planning | OCEANS 2025 - Great Lakes | belief-space A*联合规划运动与GPS／USBL测量；作者报告仿真，本次未获取全文，细节待核。 |
+| 2025（卷期12月） | Optimal UUV surfacing in uncertain environments with spatio-temporal maritime traffic | Ocean Engineering 341, 122464 | 联合考虑定位误差、交通风险与上浮时空安排；真实AIS数据驱动仿真，本次读取公开预览。 |
 | 2025 | Fast Policy Learning for 6-DOF Position Control of Underwater Vehicles | preprint / conference-stage work | 快速训练的6-DoF目标位姿控制与算法比较，比learning2swim多了一个轨迹跟踪，但是本质任务其实差不多，训练速度也差不多，有受控水池验证，仍非规划或避障。 |
 | 2025/2026 | Sim2Swim: Zero-Shot Velocity Control for Agile AUV Maneuvering in 3 Minutes | conference-stage paper | 跟踪时变三轴线速度和任意姿态，policy输出6-DoF wrench并交给传统推进器分配；3分钟训练、zero-shot水池路径实验。 |
 | 2025/2026 | Deep Reinforcement Learning for Autonomous Underwater Navigation: A Comparative Study with DWA and Digital Twin Validation（预印本题名：Digital Twin–Supervised RL Framework...） | Sensors 26(7), 2179 | **定深二维目标/gate导航 + 虚拟静态障碍避让**；PPO输出7档离散航向增量，训练采用二维运动学模型；海试用USBL和数字孪生提供位置、虚拟障碍及边界信息，BlueROV2真机执行，但没有真实声呐/相机障碍感知。 |
 | 2026 | Sim-to-Reality Adaptation for DRL Applied to Underwater Docking | arXiv preprint；稿件标注under review by IROS 2026 | **3D相对位置 + yaw对准 + 接触式垂直入坞**；PPO根据3DBM/USBL提供的相对位姿输出6维body wrench，Stonefish训练约3小时；Girona AUV水池10次成功8次。所谓adaptation实际是噪声/随机初始状态/高保真接触建模后的zero-shot transfer，没有真实数据微调或在线适应。 |
 | 2026-06 | Towards End to End Motion Planning and Execution for AUVs Using RL | arXiv v1 preprint，未确认正式收录 | **4-DoF goal-conditioned局部导航 + 静态避障**；高层以单目RGB、三帧FLS和oracle本体/目标状态输出相对(x,y,z,yaw)子目标，低层SAC再输出surge/sway/heave/yaw控制量并固定分配到8推进器。只在HoloOcean三个基础几何体场景中仿真；未做实物、真实定位或真实声呐，未见曲面/视角测试成功率最低2/20。 |
 | 2026-07 | CORAL-AUV: CFD Oriented Reinforcement Learning for Autonomous Underwater Vehicles | arXiv preprint；MIT-WHOI / WHOI / MIT | **6-DoF目标pose/waypoint控制，任务框架直接继承Learning to Swim**；核心不是新PPO，而是用OpenFOAM CFD数据训练surrogate drag model并与惯性盒、真实coast-down System ID对比。CUREE水池和真实珊瑚礁外场实验表明CFD policy误差、时间和PWM平方和更低；尾部增加2 lb后只有CFD+DR policy完成全部任务。 |
+| 2026-08 | Unified Planning–Learning Framework for Robust UUV Navigation Under Partial Observability | arXiv v1；记录注明IROS 2026 accepted | 在线地图、规划、BT辅助PPO和world model组成导航系统；仅仿真，指标口径存在待核疑点，未证明真实定位闭环。 |
 
 ### Vision-Based Goal-Conditioned Policies for Underwater Navigation in the Presence of Obstacles
 2020 McGill / Toronto  
@@ -1432,6 +1438,58 @@ future work：online learning / adaptation 让控制器能在测试时适应新�
 从系统角度 可以把Nav2Goal看作高层视觉导航 把Learning to Swim看作底层6-DoF控制 一个完整系统可能是：视觉/声呐导航policy给desired pose或velocity 然后Learning-to-Swim式controller输出thrusters  
 链接：https://arxiv.org/abs/2410.00120
 
+#### DeepVL: Dynamics and Inertial Measurements-based Deep Velocity Learning for Underwater Odometry
+2025-02 / NTNU Autonomous Robots Lab  
+作者：Mohit Singh, Kostas Alexis  
+发表：ICRA 2025；arXiv于2025-02-11公开。以下方法与实验核对自[论文v1](https://arxiv.org/html/2502.07726v1)，发表状态见[arXiv记录](https://arxiv.org/abs/2502.07726)。
+
+##### 一句话任务定义
+学习机器人自身的运动，为视觉失效时的定位提供速度观测。它研究的是learned odometry，不是RL导航policy，也没有训练障碍感知与绕障决策。
+
+##### 输入、输出和完整pipeline
+神经网络输入：IMU加速度、角速度、各推进器命令、电池电压，以及上一步循环状态。输出：机体系三轴线速度及其不确定性。  
+网络提供的速度／协方差，再与IMU预测、压力深度观测融合进EKF；需要时还可加入视觉更新。  
+因此要区分：网络预测速度，滤波器维护位姿；网络本身不直接输出目标位置、地图或导航动作。
+
+作者已经公开[DeepVL代码](https://github.com/ntnu-arl/DeepVL)，提供训练脚本、预训练模型、ROS推理入口及速度／协方差输出接口，可接入ReAqROVIO。数据入口见[作者数据仓库](https://github.com/ntnu-arl/underwater-datasets)。
+
+##### 网络和训练
+论文使用GRU记忆，先以速度回归损失训练，再学习概率输出；通过多个网络的ensemble改善不确定性估计。监督标签来自真实采集数据上的多相机VIO，而非仿真真值。  
+这里没有PPO reward：优化的是运动估计误差和概率预测质量。也没有证明仅靠仿真预训练即可zero-shot完成同样的水下里程计任务。[方法与数据来源](https://arxiv.org/html/2502.07726v1#S3)
+
+##### 实验究竟证明了什么
+验证包含水池、Trondheim Fjord数据，以及使用估计结果闭环执行方形路径。无视觉更新版本报告的平均RPE约0.39 m，计算间隔为10 m轨迹片段；参考轨迹仍来自多相机VIO。[实验部分](https://arxiv.org/html/2502.07726v1#S5)
+
+这几个限定不能省略：  
+1）约4%是上述片段相对误差口径，不能改写成“任意长度任务最终定位误差保证小于4%”。  
+2）被测估计器不使用图像，不等于采集与评价过程完全没有视觉参考。  
+3）方形路径验证闭环控制可用性，不等于已经解决未知环境避障导航。
+
+##### 对四足本体里程计的对应理解
+下面是我们的解释，不是论文另一个实验结论：  
+四足的编码器与接触约束提供相对地面的运动线索；推进器命令则提供驱动力的线索。驱动力并不是位移，电压、负载、阻力和水流会改变它们之间的映射。  
+把推进器命令加入IMU历史，是增加动力学信息；不能把它理解成水下拥有了一个没有打滑的轮式编码器。
+
+从估计接口上看，可以写成：  
+传感器与执行器历史 -> 速度分布 -> 滤波融合 -> 相对位姿。  
+而我们希望探索的是：  
+传感器与执行器历史 -> 任务相关空间估计／记忆 -> 导航决策，并在有新位置测量时校正。
+
+##### 局限与后续需要检查的条件
+依据上述实验范围，我们不能直接推断跨机器人、跨推进器布局或换载荷后的表现。若用它作为baseline，应在自己的硬件和相同观测条件下重新评价。  
+多相机VIO是有误差的参考；对真实导航是否到达目标，还应设置独立的终点误差或外部评价手段。  
+速度不确定性不自动等于定位不确定性，更不等于碰撞概率；还要考虑姿态、时间相关误差和积分过程。  
+没有外部位置约束时，未知海流引起的对地位移与模型误差可能混淆；实物微调可以改善经验映射，但不能保证解决所有不可观测情况。
+
+##### 与GUIDE的关系，以及我们应该怎么比较
+DeepVL适合回答“本体和执行器信息能否支撑水下里程计”；GUIDE式方法需要进一步回答“这种估计能否支撑长时导航决策”。  
+因此，单纯再做一个IMU + motor command -> velocity网络，方法增量有限。
+
+建议作为未来实验设计，而不是本文已有结果：  
+比较“独立估计器 + 相同导航策略”和“协同训练空间估计与导航”；保持传感器、训练数据预算、低层控制和校正次数一致。  
+同时记录估计误差、导航成功率、真实终点误差、碰撞率；不要仅凭较低的速度MSE断言导航更好。  
+如果研究稀疏GPS校正，还要检查速度网络与滤波状态／循环记忆怎样共同更新，不能只替换一次输出位置。
+
 #### Swim4Real: Deep Reinforcement Learning-Based Energy-Efficient and Agile 6-DOF Control for Underwater Vehicles
 2025 MBARI / Pontificia Universidad Catolica de Chile  
 作者：Vicente Sufan / Giancarlo Troni  
@@ -1818,6 +1876,102 @@ MarineGym：更系统的平台化水下RL benchmark 目标是把水下控制训�
 
 链接：https://marine-gym.com/  
 代码：https://github.com/Marine-RL/MarineGym  
+
+#### Active Perception for Underwater Vehicle Navigation based on Belief Space Planning
+2025-09 / OCEANS 2025 - Great Lakes  
+作者：Zongyao Liu, Ruochu Yang, Mengxue Hou  
+正式题名与DOI：[会议论文](https://doi.org/10.23919/OCEANS59106.2025.11245032)。作者实验室页面使用稍短的“An Active Perception Strategy…”名称，对应同一研究方向；正式条目按出版题名记录。
+
+##### 核实范围
+截至2026-09-23，本次读取了[作者项目介绍](https://sites.nd.edu/roarlab/underwater-vehicle-navigation/)、[作者论文列表](https://ruochuyang.github.io/)并核对出版元数据，尚未获取可完整读取的论文正文。  
+下面明确区分已确认内容与原理解释，不将未核实的网络、方程、实验数字补成论文事实。
+
+##### 任务与已确认的方法
+研究将运动路线与定位测量选择一起规划：既要到达目标、避免碰撞，又要控制能耗和定位不确定性。  
+采用belief-space POMDP表述；对belief与动作空间离散化，以具有admissible heuristic的A*求解。定位选择包含上浮GPS与USBL声学定位，并考虑不同的能量代价。  
+作者项目页报告的是仿真验证；它属于主动感知规划，没有证据表明是PPO训练的神经导航策略。[作者方法说明](https://sites.nd.edu/roarlab/underwater-vehicle-navigation/)
+
+##### Belief space是什么意思：给RL研究者的解释
+以下为概念解释，不是对未获取公式的复述。  
+普通路径规划以“机器人在某个位置”为节点；belief-space planning还关心“我们对位置有多确定”。  
+例如，同样估计位于一条通道入口，误差范围很小与很大时，可接受的路线可能不同。仅比较路程，会忽略这种差异。
+
+一般可写belief为：b_t = p(x_t | 观测历史, 动作历史)。  
+用均值和协方差近似是常见选择，但本次没有正文依据确认该论文具体采用何种分布、维数和离散精度。
+
+##### 为什么把测量当成动作
+以下是对问题机制的解释：  
+继续前进可以获得任务进展，也可能增加位置误差；获取位置测量可以减少误差，但会付出时间、能量或运行条件方面的代价。  
+所以行动不仅改变机器人的物理位置，还改变之后做决策所依赖的信息质量。
+
+在我们的任务中，可以用“继续导航／请求一次测量／移动到可校正位置”理解这种选择；这只是便于理解的候选接口，不是已核实的论文动作枚举。  
+USBL需要配套声学定位系统；如果我们限制外部设施，不能把它当成所有场景都可免费调用的观测。
+
+##### 输入输出、目标函数与实验：目前能确认到哪里
+可以确认规划考虑位置不确定性、环境和测量代价，输出涉及运动与感知的联合选择。  
+不能确认具体观测向量、障碍地图是先验给定还是在线构建、运动模型维数、GPS／USBL误差模型、能量系数、规划耗时与baseline数值。  
+也不能仅凭项目页把它称为真实声呐避障系统或海试系统。
+
+这里的代价优化不应机械地写成“RL reward”。POMDP是问题表述，不意味着必须用强化学习求解；A*是在离散搜索空间寻找低代价路径。  
+admissible heuristic表示启发式不高估剩余代价；相应最优性讨论需要限定在所构建的模型与离散问题内，不能扩展成真实水下无条件最优。
+
+##### 对我们的启发与novelty边界
+这项已确认的相关工作意味着，“把定位不确定性与上浮／声学测量代价放入导航规划”不能单独作为我们首次提出的概念。  
+我们可以研究的区别是：不确定性来自实际学习估计器，导航输入来自机载感知，并且新测量能够校正任务相关空间记忆。
+
+建议未来比较三种校正规则：固定周期、误差代理阈值、学习或规划的主动选择。必须给它们相同的可用传感器和测量预算。  
+若我们的算法只比“不允许任何校正”的baseline好，不能说明它比简单定时校正更有效。
+
+##### 待读全文清单
+需要补查：belief状态与传播；A*节点、边和heuristic；地图来源；测量精度与时延；能量和碰撞约束；实验规模、baseline、代码及真实实验情况。  
+获取正文后再填这些参数，不根据另一篇同名相近的active-perception论文代填。
+
+#### Optimal UUV surfacing in uncertain environments with spatio-temporal maritime traffic
+2025 / Ocean Engineering 341, 122464（卷期日期2025-12）  
+作者：Jorge G. Jimenez, Ethan N. Evans, Matthew J. Bays, Daniel J. Stilwell, Mingyu Kim, Harun Yetkin。  
+正式论文：[DOI](https://doi.org/10.1016/j.oceaneng.2025.122464)。
+
+##### 核实范围与任务
+本次可读取[出版社公开预览](https://www.sciencedirect.com/science/article/abs/pii/S0029801825021481)的摘要、引言和部分章节预览，未获取完整正文；以下不声称复现了算法或核实了全部实验表格。
+
+论文规划UUV到目标途中何时、何处上浮获取GPS，并考虑航速和到达时间窗口。难点是定位误差增长会使机器人无法准确判断实际出水位置，而水面船舶带来碰撞风险。
+
+##### 已确认的方法与实验
+历史AIS船舶数据用于建立时空Poisson交通模型，规划将位置不确定性与上浮安全关联，在约束下权衡路程和上浮次数。  
+评价使用2018年数据建模，以及2019年、2022年指定月份的数据模拟任务，涉及美国南加州与南新英格兰海域。属于真实交通数据驱动的仿真，不是论文已经完成相同路线的UUV海试。[出版社预览](https://www.sciencedirect.com/science/article/abs/pii/S0029801825021481)
+
+##### 为什么位置不确定性会改变上浮风险
+以下是我们的原理解释，未照搬论文定理：  
+如果估计位置恰好在船舶稀少区域，但位置误差很大，实际出水点仍可能落进附近繁忙航道。因此，不能只查询估计中心点的风险；还要考虑机器人可能出现的其他位置。  
+相反，在一片较大的低风险水域，同样的定位误差可能具有不同的后果。
+
+时空交通模型表达的是“某区域、某时间船舶出现的统计强度”，并不等价于机载传感器即时检测到每条船的位置、速度和意图。  
+因此，统计规划有助于任务安排，但不能自动替代最后阶段的实时感知与避碰。
+
+##### 输入、输出和优化目标如何理解
+按已确认问题设定，它处理任务目标、时间要求、定位不确定性和交通模型，生成包含上浮时空安排的航行方案。  
+它不是RGB／声呐到推进器命令的网络；也没有依据把它归为RL里程计。  
+精确优化器、状态离散、GPS重置模型及低层执行接口，本次未从完整正文核实，不写成确定结论。
+
+对我们来说，最重要的概念是：上浮动作同时具有信息收益和运行代价。只奖励“定位变准确”，可能会使机器人频繁中断任务；只惩罚上浮，又可能导致机器人带着不可接受的误差继续航行。
+
+##### 关于实验结果和安全结论的边界
+出版社引言中的“减少66%上浮次数、30%距离、44%碰撞风险”是在介绍作者2023年前作，不应当移作2025年本篇的新实验结果。  
+本篇讨论的形式化安全结论也必须放回交通模型、误差模型和约束假设下理解；统计风险界不能写成现实中绝不撞船。[原文引言](https://www.sciencedirect.com/science/article/abs/pii/S0029801825021481)
+
+我们在借鉴时还需检查：AIS数据是否覆盖任务海域的小船；历史交通能否代表当天情况；上浮耗时、浪涌、GPS获得稳定解所需时间是否计入。  
+这些是我们设计系统时需要回答的问题，不表示本次已核实原文对它们全部忽略。
+
+##### 与水下障碍导航的区别
+水面船舶风险与水下局部障碍碰撞是两种问题。  
+即使选择了交通较少的出水点，也仍要保证机器人能从当前位置到那里，且上浮通道没有顶棚、网具或其他障碍。  
+我们的navigation任务若包含这些结构，必须显式表示“哪里能够校正”，不能简单每隔一段时间给一个无条件可用的GPS坐标。
+
+##### 对我们的启发
+“游一段再上浮校正”具有工程依据，但概念本身不是新的。我们的研究空间应当落在实际估计误差、环境观测、导航决策与校正行为的闭环上。  
+可以先以固定校正周期作baseline，再比较是否根据估计可信度和环境条件选择校正。评价至少区分到达率、碰撞、误差、耗时及校正次数。
+
+如果研究神经网络记忆更新，还要区分两件事：规划器决定何时获取测量；估计器决定测量到来后如何修正状态。该论文的相关性主要在前者，不能据此假定后者已经解决。
 
 #### Deep Reinforcement Learning for Autonomous Underwater Navigation: A Comparative Study with DWA and Digital Twin Validation
 2025/2026 BlueROV2  
@@ -3073,6 +3227,75 @@ CFD surrogate是一种介于纯解析模型和直接CFD之间的折中：前期�
 
 链接：https://arxiv.org/abs/2607.09557
 
+#### Unified Planning–Learning Framework for Robust UUV Navigation Under Partial Observability
+2026-08 / NTNU  
+作者：Md Ether Deowan, Eleni Kelasidi。arXiv于2026-08-05公开；[arXiv记录](https://arxiv.org/abs/2608.05365)注明accepted for presentation at IROS 2026，因此不再只记为“未确认收录的预印本”。  
+以下核对[论文v1正文与PDF附录](https://arxiv.org/pdf/2608.05365)，不代表已运行其代码。
+
+##### 一句话任务与pipeline
+水下静态、动态障碍环境中的分层导航：在线占据地图 -> 全局路径 -> 学习局部控制。  
+融合声呐／深度观测，维护静态与动态地图；Voronoi规划优先、RRT作为后备；PPO通过行为树teacher辅助训练，另有latent world model提供预测残差与不确定性特征。它是显式建图与规划结合学习的系统，不是GUIDE式纯内部空间记忆导航。[方法](https://arxiv.org/html/2608.05365v1#S2)
+
+##### Observation、action与定位问题
+局部策略使用路径相对误差、本体速度、角速度、声呐距离／TTC及world-model特征；输出surge、sway、heave、yaw-rate四自由度命令，roll／pitch稳定由系统处理。  
+world model预测的部分下一步观测包含相对目标误差和速度。因此“observation-only”应理解为作者对输入来源的设计要求，不能自动推导成“已解决不依赖外部更新的目标定位”。
+
+我们的核对问题是：这些相对路径／目标量如何在真机上持续得到？长期地图投影依赖怎样的位姿估计？误差如何随时间传播？  
+在没有核实完整代码数据流和真实定位实验之前，不宜替作者认定有oracle泄漏，也不宜认定它已实现GUIDE式联合里程计。
+
+##### 训练方法怎样理解
+PPO负责任务回报，BT动作提供模仿目标；训练中逐渐减弱teacher权重。world model学习下一步特征预测，并把解码方差形成的代理量用于调节teacher影响。  
+它的不确定性首先属于预测模型，不是已经校准的位姿协方差或碰撞概率。[训练机制](https://arxiv.org/html/2608.05365v1#S2.SS3)
+
+给四足RL研究者的对应解释：  
+全局规划相当于给高层路线参考；局部policy学习如何跟随并应对附近障碍；BT是训练teacher；world model是辅助表征／预测模块。  
+不能因为这些模块共同组成系统，就说所有模块都通过同一个导航reward端到端优化。
+
+##### 仿真和感知的能力边界
+使用Isaac Sim与MarineGym BlueROV资产，动态障碍按脚本运动；实验保持水动力配置固定，没有完成真实水下迁移。附录声呐配置为360度射线测距。[实验与附录](https://arxiv.org/pdf/2608.05365)
+
+我们的判断：射线距离可以检验几何避障逻辑，但不等价于真实成像声呐。实际传感器的视场、刷新率、遮挡、回波处理会影响同一策略能否部署。  
+更不能把仿真深度图天然视为水下真实可获得的深度图；感知接口必须另行验证。
+
+##### Reward与碰撞指标应怎样读
+任务包含前进、跟踪、姿态和控制代价等奖励，以及间距／TTC相关失败判定。论文的collision统计包含TTC触发的终止。[指标定义](https://arxiv.org/html/2608.05365v1#S4.SS2)
+
+这意味着读结果时要区分：真实几何接触、进入危险间距、预测即将碰撞，以及超时／卡住。它们都可能是合理的安全指标，但不能混为“实际发生了多少次物理碰撞”。  
+终止危险episode可以帮助训练，却不会在真实世界中自动阻止碰撞；部署时需要明确最后由谁执行制动或避让。
+
+##### 定量报告中发现的核对疑点
+以下是对PDF表I、式(23)和实验叙述的独立算术检查，不是修改作者数据：
+
+| 表I方法 | 报告成功率 | 平均时间(s) | 报告TTS(s) | 按式(23)直接计算：平均时间/成功率 |
+|---|---:|---:|---:|---:|
+| PPO w/o distill | 0.20 | 22.84 | 114.2 | 114.20 |
+| PPO 20% distill | 0.46 | 13.44 | 67.2 | 29.22 |
+| PPO curriculum distill | 0.87 | 11.41 | 15.8 | 13.11 |
+| BT | 0.80 | 14.50 | 32.5 | 18.13 |
+
+若TTS采用先逐组求比值再平均，可能与汇总数字直接相除不同，但原文需要交代聚合口径，不能由读者擅自补定。  
+论文描述每方法5 seeds × 5 trials；如果这些就是全部等权二值episode，成功率应以0.04为步长，表中的0.46、0.87无法直接对应这种口径。需要确认是否另有场景聚合。  
+表I的结果行与方法部分列出的world-model／uncertainty消融组也未形成清楚的一一对应，不能只据这张表断言每一个组件的独立增益。
+
+另一个需核实的配置关系：附录训练1200 iterations，而teacher调度到1600之后才归零。因此不能直接理解为所报告最终模型一定经过完整的无teacher训练阶段。[PDF表I、表IV及式(17)、(23)](https://arxiv.org/pdf/2608.05365)
+
+这些问题限制精确数值比较，不代表整个方法无效；复现或引用量化提升前，应先取得指标定义或作者澄清。
+
+##### 实时性与安全性：我们的评价标准
+评估此类系统不能只报告policy的一次MLP推理时间。需要包括传感器处理、地图更新、重规划、控制通信，以及最坏情况下的时延。  
+同样，“预测方差大时更依赖teacher”是一种训练机制；它不能直接等同于真实运行时具备概率安全保证。
+
+对未知水流和动力学失配的表现，也需要单独的测试集。几何障碍随机化与推进器／水动力随机化解决的是不同问题；前者成功不能代替后者的迁移证据。
+
+##### 与GUIDE及我们项目的关系
+这篇应作为完整导航系统层面的相关工作：它提醒我们，避障、长期路线选择和局部执行需要闭环协调，不能只测试一个目标跟踪控制器。  
+与GUIDE迁移方向的区别在于：我们关注机器人如何在缺少持续外部目标更新时维护任务相关空间信息，并接受稀疏位置校正；它的主要路线是显式地图／规划配合学习局部控制。
+
+后续比较建议：在同一传感器、相同定位误差、相同低层执行和同一校正预算下，比较“在线地图 + 规划 + 局部策略”与“学习空间记忆 + 导航策略”。  
+不能一边让baseline使用真实声呐和漂移定位，一边让自己的policy得到仿真真值距离／目标；反过来也一样。
+
+本篇的现有证据支持仿真系统研究，尚不能支持“真实水下自主避障定位已解决”。对我们的意义是提供系统baseline与评估问题，而不是直接照搬全部模块或把其world model视为现成里程计。
+
 ### 初步判断
 水下learning-based导航和控制目前可以分开看：  
 视觉导航类：Nav2Goal这种端到端视觉反应式policy 重点是goal conditioning / imitation / waypoint reaching  
@@ -3083,4 +3306,18 @@ mapless navigation类：Hadi TD3 / BlueROV2 / HUAUV这类用range/distance/occup
 如果我们的兴趣是“水下机器人learningbased导航和运动控制” 可以先沿两条线整理：  
 1）高层导航：当前图像/距离传感/目标 -> yaw/pitch/velocity command  
 2）低层控制：目标pose/速度命令 -> thruster command  
-暂时不进入水下建图 只把VO/EKF看成提供relative goal或训练标签的工具  
+仍不全面展开水下建图；针对后续导航任务，将运动／空间估计与间歇校正作为第三条研究线，而不再仅把VO/EKF当作背景工具。  
+
+
+### 新增四篇与后续项目的对应关系
+
+| 需要解决的问题 | 对应相关工作 | 我们仍需验证的内容 |
+|---|---|---|
+| 水下本体信息能否提供可用运动估计 | DeepVL | 仿真到实物、海流与载荷变化、估计误差对导航的影响 |
+| 何时值得花代价获取位置测量 | Active Perception / Belief Space Planning | 学习估计器的可信度能否支撑决策；与固定周期公平比较 |
+| 在哪里、什么时候上浮更合适 | Optimal UUV surfacing | 局部障碍、上浮可行区域和真实测量等待过程 |
+| 如何把感知、路线与避障执行连起来 | Unified Planning–Learning | 在同样定位误差与传感器约束下比较完整系统 |
+
+候选研究问题是：学习维护任务相关空间信息，让策略在估计会漂移时仍能导航，并在得到稀疏位置观测后有效校正。这里是我们的研究设想，不是上述论文已经验证的结论。  
+“无持续外部定位”不等于“无机载感知”；“运行不依赖动捕”也不妨碍使用独立参考系统评价真实误差。  
+创新应通过具体方法与公平对照证明，不能只依据“首次把RL用于水下”“首次上浮GPS”或“增加一个不确定性输出”的表述。  
